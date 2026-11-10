@@ -1,0 +1,8 @@
+# Core AI / inference
+faster-whisper>=1.1.0,<2.0.0
+ctranslate2>=4.5.0
+huggingface_hub>=0.23.0
+
+# Configuration
+pydantic>=2.7.0
+pydantic-settings>=2.3.0

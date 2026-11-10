@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Environment / secrets
+.env
+
+# App data (user media, models, database, logs)
+storage/
+models/
+data/
+logs/
+output/
+
+# Node (Phase 3)
+node_modules/
+dist/
+
+# OS / IDE
+Thumbs.db
+.DS_Store

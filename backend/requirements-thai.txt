@@ -1,0 +1,4 @@
+# Optional: improves Thai subtitle line-breaking (word-boundary aware).
+# The application works without it; install for best Thai quality.
+#   pip install -r requirements-thai.txt
+pythainlp>=5.0.0
