@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     # Storage
     storage_path: Path = Path("./storage")
     model_path: Path = Path("./models")
+    logs_path: Path = Path("./logs")
 
     # Whisper / inference
     whisper_model: str = DEFAULT_MODEL
@@ -70,6 +71,11 @@ class Settings(BaseSettings):
 
     # Uploads
     max_upload_size_gb: float = 20.0
+
+    # Retention / automatic cleanup (days; 0 disables the rule)
+    retention_temp_days: int = 7
+    retention_audio_days: int = 14
+    retention_artifact_days: int = 0  # transcripts + subtitle exports: keep forever
 
     # External tools
     ffmpeg_path: str = "ffmpeg"
@@ -94,6 +100,10 @@ class Settings(BaseSettings):
         return self._resolve(self.model_path)
 
     @property
+    def abs_logs_path(self) -> Path:
+        return self._resolve(self.logs_path)
+
+    @property
     def abs_database_path(self) -> Path:
         """Filesystem path of the SQLite database (for mkdir purposes)."""
         url = self.database_url
@@ -116,7 +126,7 @@ class Settings(BaseSettings):
             (self.abs_storage_path / sub).mkdir(parents=True, exist_ok=True)
         self.whisper_download_root.mkdir(parents=True, exist_ok=True)
         self.abs_database_path.parent.mkdir(parents=True, exist_ok=True)
-        (REPO_ROOT / "logs").mkdir(parents=True, exist_ok=True)
+        self.abs_logs_path.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache(maxsize=1)

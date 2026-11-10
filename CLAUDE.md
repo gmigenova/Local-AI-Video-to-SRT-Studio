@@ -46,10 +46,17 @@ hardcode absolute user paths (§20.11).
   Space/Ctrl+S/arrows/Delete/Ctrl+Z/Y (guarded while typing). Reprocess
   button regenerates from raw AI transcript (confirm dialog, resets
   editor).
-- **Phase 5 NEXT** — quality/reliability (§19): Thai segmentation
-  refinement (line-aware chunk packing), VAD tuning, model benchmarks
-  (§18.3), long-video handling, retention/cleanup, docker/WSL2 GPU
-  deployment (§15).
+- **Phase 5 DONE — ALL PHASES COMPLETE** — line-aware subtitle packing
+  (`_wrapped_lines` in processor; chunks sized by wrapped lines; split
+  chunks take timing from their own first word — regression test covers
+  the tail-chunk start bug); VAD tuning via
+  `TranscriptionOptions.vad_threshold/vad_min_silence_ms`; WER/CER in
+  `app/services/transcription/metrics.py`; benchmark runner
+  `scripts/benchmark.py`; retention cleanup
+  `app/services/maintenance/retention.py` (worker runs it hourly, uploads
+  never deleted); Docker files (`docker-compose.yml`, backend/frontend
+  Dockerfiles, `requirements-gpu.txt`) — UNTESTED on the build machine.
+  Logs/heartbeat paths are configurable via `LOGS_PATH` (container-safe).
 
 ## Architecture invariants (do not break)
 

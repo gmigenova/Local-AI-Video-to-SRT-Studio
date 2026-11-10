@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import shutil
 import threading
+import time
 from collections.abc import Callable
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -49,6 +50,9 @@ _STAGE_STATUS: dict[str, JobStatus] = {
 }
 
 PipelineFactory = Callable[[], TranscriptionPipeline]
+
+#: how often the worker runs storage retention cleanup
+RETENTION_INTERVAL_SECONDS = 3600
 
 _OPTION_KEYS = {
     "beam_size",
@@ -110,16 +114,30 @@ class JobWorker:
             recovered = JobsRepository(self._session_factory()).recover_stale_jobs()
             if recovered:
                 logger.warning("Requeued %d interrupted job(s).", recovered)
+            self._run_retention()
             heartbeat.write_heartbeat(None)
             logger.info("Worker started (pid=%s, poll=%.1fs).", _pid(), self.poll_interval)
+            last_retention = time.monotonic()
             while not self._stop.is_set():
                 job_id = self.process_once()
                 if job_id is None:
                     self._stop.wait(self.poll_interval)
+                    if time.monotonic() - last_retention > RETENTION_INTERVAL_SECONDS:
+                        self._run_retention()
+                        last_retention = time.monotonic()
                 heartbeat.write_heartbeat(None)
         finally:
             heartbeat.release_lock()
             logger.info("Worker stopped.")
+
+    def _run_retention(self) -> None:
+        """Automatic storage cleanup (section 8/19). Never touches uploads."""
+        try:
+            from app.services.maintenance import RetentionService
+
+            RetentionService(self.settings).run_all(self._session_factory)
+        except Exception:  # noqa: BLE001 - cleanup must never kill the worker
+            logger.exception("Retention cleanup failed.")
 
     def stop(self) -> None:
         self._stop.set()

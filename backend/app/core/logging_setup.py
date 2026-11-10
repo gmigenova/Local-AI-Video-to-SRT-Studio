@@ -7,7 +7,7 @@ import logging.handlers
 import sys
 from pathlib import Path
 
-from app.core.config import REPO_ROOT
+from app.core.config import get_settings
 
 _CONFIGURED = False
 
@@ -17,7 +17,7 @@ _FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 def configure_logging(level: str = "INFO", log_dir: Path | None = None) -> None:
     """Configure root logging once (subsequent calls only adjust the level)."""
     global _CONFIGURED
-    log_dir = log_dir or (REPO_ROOT / "logs")
+    log_dir = log_dir or get_settings().abs_logs_path
     root = logging.getLogger()
 
     if _CONFIGURED:

@@ -1,0 +1,6 @@
+# CUDA-enabled runtime for Linux containers (Docker/WSL2, section 15).
+# The nvidia pip wheels provide the CUDA 12 libraries that the standard
+# ctranslate2 manylinux wheel links against.
+ctranslate2>=4.5.0
+nvidia-cublas-cu12>=12.4
+nvidia-cudnn-cu12>=9.1

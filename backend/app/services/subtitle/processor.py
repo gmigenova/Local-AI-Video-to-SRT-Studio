@@ -172,10 +172,18 @@ class SubtitleProcessor:
                 out.append(item)
         return out
 
+    def _wrapped_lines(self, text: str) -> int:
+        """How many display lines ``text`` needs under the wrapping rules."""
+        return (
+            wrap_text(text, self.rules.max_chars_per_line, self.rules.max_lines).count("\n")
+            + 1
+        )
+
     def _split_item(self, item: _Item) -> list[_Item]:
         """Split one item into chunks using word timings.
 
-        Chunks obey ``max_duration`` and ``max_chars_total``; break points
+        Chunks obey ``max_duration`` and wrap into at most ``max_lines``
+        lines (with ``max_chars_total`` as a hard safety cap); break points
         prefer sentence endings when ``preserve_sentence_boundaries`` is set.
         """
         rules = self.rules
@@ -188,9 +196,13 @@ class SubtitleProcessor:
         for word in item.words:
             if current:
                 candidate = current + [word]
-                too_many_chars = len(_words_text(candidate)) > max_chars
+                candidate_text = _words_text(candidate)
+                too_big = (
+                    self._wrapped_lines(candidate_text) > rules.max_lines
+                    or len(candidate_text) > max_chars
+                )
                 too_long = (word.end_ms - current[0].start_ms) > max_dur
-                if too_many_chars or too_long:
+                if too_big or too_long:
                     split_at = self._preferred_split_index(current, max_chars)
                     if split_at is not None:
                         chunks.append(current[:split_at])
@@ -198,8 +210,12 @@ class SubtitleProcessor:
                     else:
                         chunks.append(current)
                         current = []
-                    if len(_words_text(current + [word])) > max_chars:
-                        # remainder already too long even before adding: flush it too
+                    remainder_text = _words_text(current + [word])
+                    if (
+                        self._wrapped_lines(remainder_text) > rules.max_lines
+                        or len(remainder_text) > max_chars
+                    ):
+                        # remainder already too big even before adding: flush it too
                         if current:
                             chunks.append(current)
                             current = []
@@ -213,7 +229,9 @@ class SubtitleProcessor:
             text = _words_text(chunk_words)
             if not text:
                 continue
-            start = min(item.start_ms, chunk_words[0].start_ms)
+            # chunk timing comes from its own words - never from the parent
+            # segment start, or later chunks would inherit an early start.
+            start = chunk_words[0].start_ms
             end = max(chunk_words[-1].end_ms, start + 1)
             pieces.append(_Item(start_ms=start, end_ms=end, text=text, words=tuple(chunk_words)))
         if len(pieces) <= 1 and pieces:
@@ -253,6 +271,7 @@ class SubtitleProcessor:
                 combined_text = _join_text(prev.text, item.text)
                 fits = (
                     item.end_ms - prev.start_ms <= self.rules.max_duration_ms
+                    and self._wrapped_lines(combined_text) <= self.rules.max_lines
                     and len(combined_text) <= self.rules.max_chars_total
                 )
                 if gap <= self.rules.merge_max_gap_ms and not sentence_break and fits:
@@ -264,12 +283,25 @@ class SubtitleProcessor:
         return merged
 
     def _enforce_timing(self, items: list[_Item]) -> list[_Item]:
-        """Apply minimum duration, then the gap / no-overlap rule.
+        """Apply the gap / no-overlap rule, then minimum duration.
 
-        Durations are extended only up to the next subtitle's start minus the
-        configured gap - timestamps are never stretched aggressively.
+        Order matters: starts are normalized first, then durations are
+        extended - so the min-duration math always sees final start times.
+        Durations are extended only up to the next subtitle's start minus
+        the configured gap; timestamps are never stretched aggressively.
         """
         rules = self.rules
+
+        # 1. gap / no-overlap normalization
+        for i in range(1, len(items)):
+            prev, cur = items[i - 1], items[i]
+            min_start = prev.end_ms + rules.gap_ms
+            if cur.start_ms < min_start:
+                cur.start_ms = min_start
+                if cur.end_ms <= cur.start_ms:
+                    cur.end_ms = cur.start_ms + 1
+
+        # 2. minimum display duration
         for i, item in enumerate(items):
             if item.duration_ms < rules.min_duration_ms:
                 desired_end = item.start_ms + rules.min_duration_ms
@@ -280,14 +312,6 @@ class SubtitleProcessor:
                 elif limit > item.end_ms:
                     item.end_ms = limit
                 # else: cannot extend without creating an overlap; leave as-is.
-
-        for i in range(1, len(items)):
-            prev, cur = items[i - 1], items[i]
-            min_start = prev.end_ms + rules.gap_ms
-            if cur.start_ms < min_start:
-                cur.start_ms = min_start
-                if cur.end_ms <= cur.start_ms:
-                    cur.end_ms = cur.start_ms + 1
         return items
 
     def _finalize(self, items: list[_Item]) -> list[Subtitle]:

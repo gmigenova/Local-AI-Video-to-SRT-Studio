@@ -1,0 +1,62 @@
+# Local stack: frontend (nginx) + api + GPU worker (section 15).
+# Requires Docker with NVIDIA GPU support (Docker Desktop + WSL2 on Windows,
+# or nvidia-container-toolkit on Linux):
+#   docker compose up --build
+#   frontend: http://localhost:8080   api docs: http://localhost:8000/docs
+#
+# Models are cached in the mounted ./models volume; pre-download with
+#   docker compose run --rm worker python scripts/download_models.py large-v3
+# to run fully offline afterwards.
+
+services:
+  api:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/database:/data/database
+      - ./storage:/data/storage
+      - ./models:/data/models
+      - ./logs:/app/logs
+    environment:
+      APP_ENV: production
+      LOGS_PATH: /app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    build: ./backend
+    command: python -m app.workers.worker
+    depends_on:
+      api:
+        condition: service_healthy  # let the API run migrations first
+    volumes:
+      - ./data/database:/data/database
+      - ./storage:/data/storage
+      - ./models:/data/models
+      - ./logs:/app/logs
+    environment:
+      APP_ENV: production
+      LOGS_PATH: /app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped

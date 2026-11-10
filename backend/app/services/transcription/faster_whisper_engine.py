@@ -167,6 +167,19 @@ class FasterWhisperEngine(TranscriptionEngine):
             raise TranscriptionError("Model is not loaded; call load_model() first.")
 
         kwargs = self._supported_transcribe_kwargs(options)
+
+        # Silero VAD tuning (§19): compose vad_parameters only when set and
+        # supported by the installed version.
+        vad_params: dict = {}
+        if options.vad_threshold is not None:
+            vad_params["threshold"] = options.vad_threshold
+        if options.vad_min_silence_ms is not None:
+            vad_params["min_silence_duration_ms"] = options.vad_min_silence_ms
+        if vad_params and "vad_parameters" in inspect.signature(
+            self._model.transcribe
+        ).parameters:
+            kwargs["vad_parameters"] = vad_params
+
         logger.info(
             "Transcribing %s (language=%s, model=%s, kwargs=%s)",
             Path(audio_path).name,

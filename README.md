@@ -6,7 +6,7 @@ no translation, no speaker diarization.
 
 Spec: [writing-block.md](writing-block.md)
 
-## Status — Phase 4 complete (subtitle editor)
+## Status — all 5 phases complete
 
 - [x] **Phase 1** — AI engine + CLI: FFprobe validation, FFmpeg audio
       extraction, Faster-Whisper transcription, subtitle processing,
@@ -26,7 +26,11 @@ Spec: [writing-block.md](writing-block.md)
       live quality warnings (§11.6), keyboard shortcuts (Space, Ctrl+S,
       ↑/↓, Delete, Ctrl+Z/Y), real-time preview overlay, exports,
       one-click reprocess from the AI transcript.
-- [ ] **Phase 5** — Quality, benchmarking, reliability hardening.
+- [x] **Phase 5** — Quality & reliability: line-aware subtitle packing
+      (chunks sized by wrapped lines, not raw chars — split tails keep
+      their own word timing), VAD tuning parameters, WER/CER metrics +
+      benchmark runner, retention-based automatic cleanup (never touches
+      source videos), Docker/WSL2 GPU deployment files.
 
 ## Requirements
 
@@ -102,6 +106,52 @@ CLI options: `--model`, `--language`, `--audio-stream`, `--beam-size`,
 `--initial-prompt`, `--no-vad`, `--no-word-timestamps`, `--min-duration`,
 `--max-duration`, `--max-chars-per-line`, `--formats`.
 
+## Benchmarks (§18.3)
+
+```powershell
+# compare models on your own test videos; reference transcripts optional
+.venv\Scripts\python.exe scripts\benchmark.py video1.mp4 video2.mp4 `
+    --models large-v3-turbo large-v3 `
+    --refs reference1.srt reference2.txt
+```
+
+Writes `benchmarks/report.json` + `report.md` with real-time factor,
+processing time, detected language, segments, peak RSS and accuracy
+(WER for space languages, CER for th/ja/zh). Do not assume a model is
+more accurate for Thai simply because it is larger — measure.
+
+## Automatic cleanup (§8)
+
+Retention runs in the worker at startup and hourly. Configure in `.env`:
+
+```env
+RETENTION_TEMP_DAYS=7        # storage/temp
+RETENTION_AUDIO_DAYS=14      # extracted audio of completed jobs
+RETENTION_ARTIFACT_DAYS=0    # transcripts + subtitle exports (0 = keep)
+```
+
+Source videos (`storage/uploads`) are **never** deleted automatically —
+only an explicit project delete removes them.
+
+## Docker / WSL2 GPU deployment (§15)
+
+```powershell
+docker compose up --build
+# frontend http://localhost:8080 · API docs http://localhost:8000/docs
+```
+
+The worker container runs with `deploy.resources` GPU reservations (CUDA
+via pip-provided cuBLAS/cuDNN; requires Docker Desktop + WSL2 GPU
+passthrough or nvidia-container-toolkit). Pre-download models into the
+mounted volume to run fully offline:
+
+```powershell
+docker compose run --rm worker python scripts/download_models.py large-v3
+```
+
+> Note: the Docker path is provided per the spec but was **not exercised on
+> the build machine** (no Docker / no NVIDIA GPU available there).
+
 ## GPU / CUDA — important
 
 CTranslate2 (the runtime behind Faster-Whisper) ships **CPU-only builds for
@@ -156,11 +206,10 @@ scripts/           env checks, model download, start/stop helpers
 storage/ models/ data/ logs/   runtime dirs (gitignored)
 ```
 
-## Known limitations (tracked for later phases)
+## Known limitations
 
-- Segments whose text fits the character budget but wraps to 3 lines produce
-  a `TOO_MANY_LINES` warning instead of being re-split (Phase 5 refinement).
 - Thai line-breaking falls back to character-boundary splits when `pythainlp`
   is not installed (install `requirements-thai.txt` for word boundaries).
-- Chunked/resumable uploads, background jobs, and the web UI arrive in
-  Phases 2-4.
+- Chunked/resumable uploads are not implemented yet (single-request upload
+  only; fine on localhost for large files).
+- The Docker deployment is provided but untested on the build machine.

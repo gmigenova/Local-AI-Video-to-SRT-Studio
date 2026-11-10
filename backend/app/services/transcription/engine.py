@@ -112,6 +112,9 @@ class TranscriptionOptions:
     word_timestamps: bool = True
     condition_on_previous_text: bool = True
     initial_prompt: str | None = None
+    # Optional Silero VAD tuning (section 19 "Optimize VAD"); None = engine default
+    vad_threshold: float | None = None
+    vad_min_silence_ms: int | None = None
 
     def to_engine_kwargs(self) -> dict:
         """Keyword arguments passed to the concrete engine's transcribe().
