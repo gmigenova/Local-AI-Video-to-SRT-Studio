@@ -32,6 +32,12 @@ class MediaOut(BaseModel):
     created_at: datetime
 
 
+class MediaUpdate(BaseModel):
+    """PATCH /media/{id}: select the audio stream (absolute stream index)."""
+
+    stream_index: int
+
+
 class UploadResult(BaseModel):
     """Response for POST /media/upload (section 10.4) + live stream list."""
 

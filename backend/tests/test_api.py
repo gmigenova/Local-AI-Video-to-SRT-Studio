@@ -136,6 +136,17 @@ class TestUploadValidation:
         streams = client.get(f"/api/v1/media/{media_id}/streams").json()
         assert len(streams) >= 1
 
+        # audio stream selection (§11.2): valid absolute index -> 200
+        patched = client.patch(
+            f"/api/v1/media/{media_id}", json={"stream_index": streams[0]["stream_index"]}
+        )
+        assert patched.status_code == 200
+        assert patched.json()["audio_stream_index"] == 0
+
+        # invalid stream index -> 400
+        bad = client.patch(f"/api/v1/media/{media_id}", json={"stream_index": 99})
+        assert bad.status_code == 400
+
         full = client.get(f"/api/v1/media/{media_id}/stream")
         assert full.status_code == 200
 

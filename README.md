@@ -6,7 +6,7 @@ no translation, no speaker diarization.
 
 Spec: [writing-block.md](writing-block.md)
 
-## Status — Phase 2 complete (backend + worker)
+## Status — Phase 3 complete (web frontend)
 
 - [x] **Phase 1** — AI engine + CLI: FFprobe validation, FFmpeg audio
       extraction, Faster-Whisper transcription, subtitle processing,
@@ -15,7 +15,11 @@ Spec: [writing-block.md](writing-block.md)
       (§7 schema), background AI worker with atomic SQLite job queue (§9),
       full REST API (§10) incl. upload, jobs, subtitle editing, reprocess,
       export, health/system info.
-- [ ] **Phase 3** — React + Vite frontend (dashboard, upload, processing).
+- [x] **Phase 3** — React + Vite + TypeScript frontend: dashboard,
+      projects, drag-and-drop multi-file upload with audio-stream
+      selection, transcription settings (model/language/quality/advanced),
+      live processing screen (polling, cancel, retry), result view with
+      synchronized video + subtitles and exports. Dark/light themes.
 - [ ] **Phase 4** — Subtitle editor UI.
 - [ ] **Phase 5** — Quality, benchmarking, reliability hardening.
 
@@ -47,14 +51,21 @@ powershell -ExecutionPolicy Bypass -File scripts\check_environment.ps1
 
 ## Usage
 
-### Web API + background worker (Phase 2)
+### Full web app (Phase 3)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\start_local.ps1
 ```
 
-- API: `http://127.0.0.1:8000` — interactive docs at `http://127.0.0.1:8000/docs`
-- Worker: separate process polling the job queue (SQLite), heartbeat in `logs/worker.json`
+Starts the AI worker, the API (`http://127.0.0.1:8000`, docs at `/docs`) and
+the frontend (`http://localhost:5173`, with `/api` proxied to the backend).
+Add `-NoFrontend` for API-only.
+
+### API-only (headless)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_local.ps1 -NoFrontend
+```
 
 REST surface (`/api/v1`): `GET /health`, `GET /system/info`, projects CRUD,
 `POST /media/upload`, `GET /media/{id}/stream` (Range-supported video

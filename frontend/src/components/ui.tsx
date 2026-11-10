@@ -1,0 +1,203 @@
+// Minimal UI primitives (shadcn-style, hand-rolled to stay dependency-light).
+
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
+import { X } from 'lucide-react'
+
+export function cn(...classes: (string | false | null | undefined)[]): string {
+  return classes.filter(Boolean).join(' ')
+}
+
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost'
+
+export function Button({
+  variant = 'primary',
+  className,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
+  const styles: Record<ButtonVariant, string> = {
+    primary: 'bg-accent text-accent-text hover:bg-accent-hover',
+    secondary: 'bg-surface-2 text-text hover:bg-line',
+    danger: 'bg-transparent text-danger border border-danger/40 hover:bg-danger/10',
+    ghost: 'bg-transparent text-muted hover:text-text hover:bg-surface-2',
+  }
+  return (
+    <button
+      className={cn(
+        'inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium',
+        'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        styles[variant],
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn('rounded-xl border border-line bg-surface shadow-sm', className)}
+      {...props}
+    />
+  )
+}
+
+export function CardHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: ReactNode
+  subtitle?: ReactNode
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+export function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode
+  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+}) {
+  const tones = {
+    neutral: 'bg-surface-2 text-muted',
+    success: 'bg-success/10 text-success',
+    warning: 'bg-warning/10 text-warning',
+    danger: 'bg-danger/10 text-danger',
+    info: 'bg-accent/10 text-accent',
+  }
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+        tones[tone],
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+export function Progress({ value }: { value: number }) {
+  const pct = Math.min(100, Math.max(0, value))
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
+      <div
+        className="h-full rounded-full bg-accent transition-[width] duration-500"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  )
+}
+
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
+      {children}
+      {hint ? <span className="mt-1 block text-xs text-muted/80">{hint}</span> : null}
+    </label>
+  )
+}
+
+export const inputClass =
+  'w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-text ' +
+  'outline-none transition-colors placeholder:text-muted/60 focus:border-accent'
+
+export function Modal({
+  open,
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+  wide?: boolean
+}) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+      <div
+        className={cn(
+          'relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl nice-scroll',
+          wide ? 'max-w-2xl' : 'max-w-md',
+        )}
+      >
+        <div className="sticky top-0 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+export function Spinner({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent',
+        className,
+      )}
+    />
+  )
+}
+
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: ReactNode
+  title: string
+  description: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-line px-6 py-14 text-center">
+      <div className="text-muted">{icon}</div>
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="mt-1 text-xs text-muted">{description}</p>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
+    queued: 'neutral',
+    validating: 'info',
+    extracting_audio: 'info',
+    transcribing: 'info',
+    processing_subtitles: 'info',
+    completed: 'success',
+    failed: 'danger',
+    cancelling: 'warning',
+    cancelled: 'warning',
+  }
+  return <Badge tone={map[status] ?? 'neutral'}>{status.replace(/_/g, ' ')}</Badge>
+}

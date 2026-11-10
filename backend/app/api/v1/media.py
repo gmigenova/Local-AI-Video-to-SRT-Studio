@@ -14,7 +14,7 @@ from app.core.errors import MediaValidationError
 from app.database.base import get_db
 from app.models.media_file import MediaFile
 from app.repositories.media import MediaRepository
-from app.schemas.media import AudioStreamOut, MediaOut, UploadResult
+from app.schemas.media import AudioStreamOut, MediaOut, MediaUpdate, UploadResult
 from app.services.media.ffprobe import probe_video
 from app.services.media.upload_service import UploadService
 
@@ -99,6 +99,32 @@ def media_streams(media_id: str, db: Session = Depends(get_db)) -> list[AudioStr
         )
         for s in info.audio_streams
     ]
+
+
+@router.patch("/media/{media_id}", response_model=MediaOut)
+def update_media(
+    media_id: str, payload: MediaUpdate, db: Session = Depends(get_db)
+) -> MediaOut:
+    """Select which audio stream transcription should use (§11.2)."""
+    media = _get_media_or_404(db, media_id)
+    try:
+        info = probe_video(media.file_path)
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    streams = sorted(info.audio_streams, key=lambda s: s.stream_index)
+    nth = next(
+        (i for i, s in enumerate(streams) if s.stream_index == payload.stream_index), None
+    )
+    if nth is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Stream #{payload.stream_index} is not an audio stream in this file.",
+        )
+    media.audio_stream_index = nth
+    db.commit()
+    db.refresh(media)
+    return MediaOut.model_validate(media)
 
 
 @router.get("/media/{media_id}/stream")

@@ -28,14 +28,19 @@ hardcode absolute user paths (§20.11).
   `data/database/app.db`, repositories incl. atomic job claim
   (`JobsRepository.claim_next`), background worker (`python -m
   app.workers.worker`) with heartbeat/lock/restart-recovery, upload/export
-  services, subtitle CRUD + reprocess APIs. 85 tests green.
-- **Phase 3 NEXT** — React+Vite+TS frontend (§11): dashboard, projects,
-  upload (drag&drop + audio stream pick), transcription settings,
-  processing screen (polling 1-2s), video player. API base
-  `http://127.0.0.1:8000/api/v1`; video preview via
-  `GET /media/{id}/stream` (Range); CORS already allows Vite dev origin 5173.
-- Phase 4 — subtitle editor (§11.5) incl. shortcuts, undo/redo, auto-save,
-  quality warnings (warnings data available via subtitle rows + rules).
+  services, subtitle CRUD + reprocess APIs.
+- **Phase 3 DONE** — React+Vite+TS frontend (`frontend/`, strict TS +
+  eslint clean, `npm run build` green). Tailwind v4 with CSS-var theming
+  (class-based dark mode), TanStack Query polling, Zustand stores
+  (`stores/theme.ts`, `stores/settings.ts`), lucide icons. Vite proxies
+  `/api` -> `127.0.0.1:8000`. Pages: dashboard, projects, project detail,
+  upload (multi-file + audio stream PATCH), processing (poll 1.5s, cancel,
+  retry), job result (video + synced subtitle list + exports). Start all:
+  `scripts/start_local.ps1`.
+- **Phase 4 NEXT** — subtitle editor (§11.5): inline text/timestamp
+  editing on the result page, add/delete/split/merge, undo/redo,
+  auto-save (bulk-update), search & replace, keyboard shortcuts (§11.5
+  table), quality warnings (§11.6). Backend endpoints already exist.
 - Phase 5 — quality/reliability (§19).
 
 ## Architecture invariants (do not break)
