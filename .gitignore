@@ -11,12 +11,13 @@ venv/
 # Environment / secrets
 .env
 
-# App data (user media, models, database, logs)
-storage/
-models/
-data/
-logs/
-output/
+# App data (user media, models, database, logs) - repo-root only; an
+# unanchored "models/" previously swallowed backend/app/models/.
+/storage/
+/models/
+/data/
+/logs/
+/output/
 
 # Node (Phase 3)
 node_modules/
