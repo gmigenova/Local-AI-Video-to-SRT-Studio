@@ -35,3 +35,19 @@ class SubtitleBulkItem(BaseModel):
 
 class BulkSubtitleUpdate(BaseModel):
     updates: list[SubtitleBulkItem]
+
+
+class SubtitleSyncItem(BaseModel):
+    """One subtitle in an editor sync: order = list order (renumbered 1..N)."""
+
+    start_ms: int = Field(ge=0)
+    end_ms: int = Field(ge=0)
+    text: str
+    original_text: str | None = None
+    is_edited: bool = False
+
+
+class SubtitleSyncRequest(BaseModel):
+    """Full-state save from the subtitle editor (add/delete/edit/reorder)."""
+
+    subtitles: list[SubtitleSyncItem]

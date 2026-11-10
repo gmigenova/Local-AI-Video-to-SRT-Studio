@@ -10,9 +10,19 @@ from app.core.config import get_settings
 from app.database.base import get_db
 from app.repositories.jobs import JobsRepository
 from app.repositories.subtitles import SubtitlesRepository
-from app.schemas.subtitle import BulkSubtitleUpdate, SubtitleOut, SubtitleUpdate
+from app.schemas.subtitle import (
+    BulkSubtitleUpdate,
+    SubtitleOut,
+    SubtitleSyncRequest,
+    SubtitleUpdate,
+)
 from app.services.export import ExportJobError, export_job_subtitles
-from app.services.subtitle import SubtitleProcessor, SubtitleRules, export_subtitles
+from app.services.subtitle import (
+    Subtitle,
+    SubtitleProcessor,
+    SubtitleRules,
+    export_subtitles,
+)
 from app.services.transcription.engine import make_segments_from_payload
 from app.workers.worker import _RULE_KEYS
 
@@ -88,6 +98,62 @@ def bulk_update_subtitles(
         updated += 1
     db.commit()  # single transaction (§7.7)
     return {"job_id": job_id, "updated": updated}
+
+
+@router.post("/jobs/{job_id}/subtitles/sync")
+def sync_subtitles(
+    job_id: str, payload: SubtitleSyncRequest, db: Session = Depends(get_db)
+) -> dict:
+    """Full-state save from the subtitle editor (§11.5 auto-save).
+
+    Replaces all subtitle rows in one transaction, renumbering 1..N in the
+    order received. Covers text/time edits, add, delete, split and merge.
+    """
+    _get_job_or_404(db, job_id)
+    for item in payload.subtitles:
+        if item.end_ms <= item.start_ms:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timestamps: end ({item.end_ms}) must be greater "
+                f"than start ({item.start_ms}).",
+            )
+    repo = SubtitlesRepository(db)
+    repo.replace_for_job(
+        job_id,
+        [
+            Subtitle(
+                index=i,
+                start_ms=item.start_ms,
+                end_ms=item.end_ms,
+                text=item.text,
+                original_text=item.original_text or item.text,
+                is_edited=item.is_edited,
+            )
+            for i, item in enumerate(payload.subtitles, start=1)
+        ],
+    )
+    db.commit()
+
+    # keep the on-disk SRT in sync with what the user sees
+    rows = repo.list_for_job(job_id)
+    srt_dir = get_settings().storage_subdir("subtitles") / job_id
+    export_subtitles(
+        [
+            Subtitle(
+                index=r.subtitle_index,
+                start_ms=r.start_ms,
+                end_ms=r.end_ms,
+                text=r.text,
+                original_text=r.original_text,
+                is_edited=r.is_edited,
+            )
+            for r in rows
+        ],
+        srt_dir / "output.srt",
+        "srt",
+    )
+
+    return {"job_id": job_id, "saved": len(payload.subtitles)}
 
 
 @router.post("/jobs/{job_id}/subtitles/reprocess")

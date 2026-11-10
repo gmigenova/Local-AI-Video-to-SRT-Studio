@@ -10,6 +10,7 @@ import type {
   AudioStream,
   Project,
   Subtitle,
+  SyncSubtitleItem,
   SystemInfo,
   UploadResult,
 } from '../types'
@@ -102,6 +103,11 @@ export const api = {
 
   // subtitles
   listSubtitles: (jobId: string) => request<Subtitle[]>(`/jobs/${jobId}/subtitles`),
+  syncSubtitles: (jobId: string, subtitles: SyncSubtitleItem[]) =>
+    request<{ job_id: string; saved: number }>(`/jobs/${jobId}/subtitles/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ subtitles }),
+    }),
   updateSubtitle: (
     jobId: string,
     subtitleId: string,

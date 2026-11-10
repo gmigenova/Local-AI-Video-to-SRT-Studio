@@ -322,6 +322,51 @@ class TestSubtitleEditing:
         ).json()["job_id"]
         assert client.get(f"/api/v1/jobs/{job_id}/export/docx").status_code == 400
 
+    @requires_ffmpeg
+    def test_sync_full_state(self, client, media_id, worker):
+        """Editor full-state save: edit + add + delete + renumber in one call."""
+        drain_queue()
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}
+        ).json()["job_id"]
+        assert worker.process_once() == job_id
+
+        # edit the existing row, add two rows (simulating split), drop none
+        payload = {
+            "subtitles": [
+                {"start_ms": 1000, "end_ms": 2000, "text": "Edited.", "is_edited": True},
+                {"start_ms": 2000, "end_ms": 3000, "text": "New row."},
+                {"start_ms": 3000, "end_ms": 4000, "text": "Another.", "is_edited": False},
+            ]
+        }
+        synced = client.post(f"/api/v1/jobs/{job_id}/subtitles/sync", json=payload)
+        assert synced.status_code == 200, synced.text
+        assert synced.json()["saved"] == 3
+
+        rows = client.get(f"/api/v1/jobs/{job_id}/subtitles").json()
+        assert [r["subtitle_index"] for r in rows] == [1, 2, 3]
+        assert rows[0]["text"] == "Edited."
+        assert rows[0]["is_edited"] is True
+        assert rows[2]["text"] == "Another."
+
+        # invalid timestamps rejected atomically (nothing saved)
+        before = len(client.get(f"/api/v1/jobs/{job_id}/subtitles").json())
+        bad = client.post(
+            f"/api/v1/jobs/{job_id}/subtitles/sync",
+            json={"subtitles": [{"start_ms": 5, "end_ms": 1, "text": "bad"}]},
+        )
+        assert bad.status_code == 400
+        after = client.get(f"/api/v1/jobs/{job_id}/subtitles").json()
+        assert len(after) == before
+        assert after[0]["text"] == "Edited."
+
+        # SRT file regenerated with the edited content
+        srt = (get_settings().storage_subdir("subtitles") / job_id / "output.srt").read_text(
+            encoding="utf-8"
+        )
+        assert "Edited." in srt
+        assert "00:00:01,000 --> 00:00:02,000" in srt
+
     def test_export_no_subtitles_yet(self, client, media_id):
         job_id = client.post(
             "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}

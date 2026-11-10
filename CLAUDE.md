@@ -35,13 +35,21 @@ hardcode absolute user paths (§20.11).
   (`stores/theme.ts`, `stores/settings.ts`), lucide icons. Vite proxies
   `/api` -> `127.0.0.1:8000`. Pages: dashboard, projects, project detail,
   upload (multi-file + audio stream PATCH), processing (poll 1.5s, cancel,
-  retry), job result (video + synced subtitle list + exports). Start all:
-  `scripts/start_local.ps1`.
-- **Phase 4 NEXT** — subtitle editor (§11.5): inline text/timestamp
-  editing on the result page, add/delete/split/merge, undo/redo,
-  auto-save (bulk-update), search & replace, keyboard shortcuts (§11.5
-  table), quality warnings (§11.6). Backend endpoints already exist.
-- Phase 5 — quality/reliability (§19).
+  retry). Start all: `scripts/start_local.ps1`.
+- **Phase 4 DONE** — subtitle editor at `/jobs/{id}`:
+  `features/subtitle-editor/`. `useSubtitleEditor.ts` holds the working
+  copy + undo/redo (typing coalesced) + debounced (1.2s) full-state
+  auto-save via `POST /jobs/{id}/subtitles/sync` (atomic replace +
+  renumber + SRT regen — the ONLY persistence call the editor needs).
+  Split cuts at the playhead (word-boundary for spaced text, character for
+  Thai). Quality checks in `quality.ts` mirror §6.1 defaults. Keyboard:
+  Space/Ctrl+S/arrows/Delete/Ctrl+Z/Y (guarded while typing). Reprocess
+  button regenerates from raw AI transcript (confirm dialog, resets
+  editor).
+- **Phase 5 NEXT** — quality/reliability (§19): Thai segmentation
+  refinement (line-aware chunk packing), VAD tuning, model benchmarks
+  (§18.3), long-video handling, retention/cleanup, docker/WSL2 GPU
+  deployment (§15).
 
 ## Architecture invariants (do not break)
 

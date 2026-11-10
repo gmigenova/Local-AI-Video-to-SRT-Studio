@@ -117,6 +117,15 @@ export interface Subtitle {
   updated_at: string
 }
 
+export interface SyncSubtitleItem {
+  subtitle_index: number
+  start_ms: number
+  end_ms: number
+  text: string
+  original_text: string
+  is_edited: boolean
+}
+
 export interface TranscriptionSettings {
   beam_size?: number
   best_of?: number

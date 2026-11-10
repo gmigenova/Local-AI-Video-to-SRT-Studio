@@ -6,7 +6,7 @@ no translation, no speaker diarization.
 
 Spec: [writing-block.md](writing-block.md)
 
-## Status — Phase 3 complete (web frontend)
+## Status — Phase 4 complete (subtitle editor)
 
 - [x] **Phase 1** — AI engine + CLI: FFprobe validation, FFmpeg audio
       extraction, Faster-Whisper transcription, subtitle processing,
@@ -18,9 +18,14 @@ Spec: [writing-block.md](writing-block.md)
 - [x] **Phase 3** — React + Vite + TypeScript frontend: dashboard,
       projects, drag-and-drop multi-file upload with audio-stream
       selection, transcription settings (model/language/quality/advanced),
-      live processing screen (polling, cancel, retry), result view with
-      synchronized video + subtitles and exports. Dark/light themes.
-- [ ] **Phase 4** — Subtitle editor UI.
+      live processing screen (polling, cancel, retry). Dark/light themes.
+- [x] **Phase 4** — Subtitle editor: inline text + timestamp editing,
+      add/delete/split-at-playhead/merge, undo/redo with typing
+      coalescing, debounced full-state auto-save (atomic `sync` endpoint),
+      search & replace, timeline strip with clickable subtitle blocks,
+      live quality warnings (§11.6), keyboard shortcuts (Space, Ctrl+S,
+      ↑/↓, Delete, Ctrl+Z/Y), real-time preview overlay, exports,
+      one-click reprocess from the AI transcript.
 - [ ] **Phase 5** — Quality, benchmarking, reliability hardening.
 
 ## Requirements
