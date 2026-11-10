@@ -1,9 +1,10 @@
-# Starts the local development stack.
-# Phase 1: activates the venv and shows CLI usage.
-# Phase 2+: will also start the FastAPI server and the AI worker.
+# Starts the local development stack (Phase 2: FastAPI + AI worker).
+# Usage: powershell -ExecutionPolicy Bypass -File scripts\start_local.ps1
+# Stops with Ctrl+C (or close both windows).
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $venvPython = Join-Path $repoRoot '.venv\Scripts\python.exe'
+$backendDir = Join-Path $repoRoot 'backend'
 
 if (-not (Test-Path $venvPython)) {
     Write-Host 'Virtual environment not found. Creating it with uv (Python 3.11)...' -ForegroundColor Yellow
@@ -11,10 +12,12 @@ if (-not (Test-Path $venvPython)) {
     uv pip install --python $venvPython -r (Join-Path $repoRoot 'backend\requirements.txt')
 }
 
-Write-Host '=== Local AI Video-to-SRT Studio (Phase 1: CLI pipeline) ===' -ForegroundColor Cyan
-Write-Host ''
-Write-Host 'Examples:'
-Write-Host "  $venvPython -m app.cli probe      <video.mp4>   # inspect media"
-Write-Host "  $venvPython -m app.cli transcribe <video.mp4> -o output  # video -> SRT"
-Write-Host ''
-& $venvPython -m app.cli --help
+Write-Host '=== Local AI Video-to-SRT Studio ===' -ForegroundColor Cyan
+Write-Host 'Starting AI worker (background window)...'
+$worker = Start-Process -FilePath $venvPython -ArgumentList '-m', 'app.workers.worker' `
+    -WorkingDirectory $backendDir -PassThru
+Write-Host "  worker pid: $($worker.Id)"
+
+Write-Host 'Starting API server at http://127.0.0.1:8000 (docs: /docs)...'
+Write-Host 'Press Ctrl+C to stop the API; the worker window closes separately.'
+& $venvPython -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir $backendDir

@@ -4,6 +4,7 @@ from app.services.media.audio_extractor import AudioExtractor, ExtractionResult
 from app.services.media.ffprobe import (
     AudioStreamInfo,
     MediaInfo,
+    is_supported_extension,
     is_supported_video_file,
     probe_video,
 )
@@ -13,6 +14,7 @@ __all__ = [
     "AudioStreamInfo",
     "ExtractionResult",
     "MediaInfo",
+    "is_supported_extension",
     "is_supported_video_file",
     "probe_video",
 ]

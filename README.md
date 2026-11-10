@@ -6,13 +6,15 @@ no translation, no speaker diarization.
 
 Spec: [writing-block.md](writing-block.md)
 
-## Status — Phase 1 complete (CLI pipeline)
+## Status — Phase 2 complete (backend + worker)
 
 - [x] **Phase 1** — AI engine + CLI: FFprobe validation, FFmpeg audio
       extraction, Faster-Whisper transcription, subtitle processing,
       SRT/VTT/TXT/JSON export, unit/integration tests.
-- [ ] **Phase 2** — FastAPI backend, SQLite + SQLAlchemy + Alembic,
-      background worker, REST API.
+- [x] **Phase 2** — FastAPI backend: SQLite + SQLAlchemy 2.x + Alembic
+      (§7 schema), background AI worker with atomic SQLite job queue (§9),
+      full REST API (§10) incl. upload, jobs, subtitle editing, reprocess,
+      export, health/system info.
 - [ ] **Phase 3** — React + Vite frontend (dashboard, upload, processing).
 - [ ] **Phase 4** — Subtitle editor UI.
 - [ ] **Phase 5** — Quality, benchmarking, reliability hardening.
@@ -43,7 +45,24 @@ powershell -ExecutionPolicy Bypass -File scripts\check_environment.ps1
 .venv\Scripts\python.exe scripts\download_models.py large-v3
 ```
 
-## Usage (Phase 1 CLI)
+## Usage
+
+### Web API + background worker (Phase 2)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_local.ps1
+```
+
+- API: `http://127.0.0.1:8000` — interactive docs at `http://127.0.0.1:8000/docs`
+- Worker: separate process polling the job queue (SQLite), heartbeat in `logs/worker.json`
+
+REST surface (`/api/v1`): `GET /health`, `GET /system/info`, projects CRUD,
+`POST /media/upload`, `GET /media/{id}/stream` (Range-supported video
+preview), `POST /jobs`, `GET /jobs`, `GET /jobs/{id}`, `POST /jobs/{id}/cancel`,
+`POST /jobs/{id}/retry`, subtitle list/update/bulk-update/reprocess, and
+`GET /jobs/{id}/export/{srt|vtt|txt|json}`.
+
+### CLI (Phase 1)
 
 Run from the `backend/` directory with the venv active:
 
@@ -100,14 +119,24 @@ Set-Location backend; ..\.venv\Scripts\python.exe -m mypy app; Set-Location ..
 ```text
 backend/app/
   core/            settings, logging, error types
+  database/        engine/session (SQLite WAL), Alembic runner
+  models/          SQLAlchemy ORM (§7 schema: projects, media_files,
+                   transcription_jobs, transcription_segments, subtitles,
+                   transcription_settings)
+  repositories/    data access incl. atomic job claim
+  schemas/         Pydantic API schemas
   services/
-    media/         FFprobe inspection, FFmpeg 16 kHz mono WAV extraction
+    media/         FFprobe inspection, FFmpeg WAV extraction, uploads
     transcription/ engine abstraction, Faster-Whisper impl, ModelManager
     subtitle/      processing rules, Thai-aware line splitting, exporters
+    export/        DB rows -> downloadable files
+  workers/         background job worker + heartbeat/lock
+  api/v1/          REST routers (§10)
   pipeline.py      probe -> extract -> transcribe -> subtitles -> export
   cli.py           Phase 1 command-line interface
-backend/tests/     unit + integration tests (67 tests)
-scripts/           env checks, model download, PowerShell helpers
+backend/migrations/  Alembic revisions
+backend/tests/     85 unit + integration tests
+scripts/           env checks, model download, start/stop helpers
 storage/ models/ data/ logs/   runtime dirs (gitignored)
 ```
 

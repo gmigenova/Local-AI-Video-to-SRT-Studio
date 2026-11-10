@@ -32,7 +32,12 @@ _PROBE_TIMEOUT_SECONDS = 60
 
 def is_supported_video_file(path: Path) -> bool:
     """True when the file extension is one of the supported containers."""
-    return path.suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS
+    return is_supported_extension(path.suffix)
+
+
+def is_supported_extension(suffix: str) -> bool:
+    """True when ``suffix`` (e.g. ``'.mp4'``) is a supported container."""
+    return suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS
 
 
 @dataclass(frozen=True)

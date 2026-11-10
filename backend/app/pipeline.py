@@ -52,6 +52,7 @@ class PipelineResult:
     work_dir: Path
     transcript_path: Path | None = None
     export_paths: dict[str, Path] = field(default_factory=dict)
+    transcription: TranscriptionResult | None = None
 
 
 def _noop_progress(fraction: float, stage: str) -> None:  # pragma: no cover
@@ -184,6 +185,7 @@ class TranscriptionPipeline:
             work_dir=work_dir,
             transcript_path=transcript_path,
             export_paths=export_paths,
+            transcription=transcription,
         )
 
 

@@ -1,10 +1,17 @@
-"""Shared pytest fixtures and path setup."""
+"""Shared pytest fixtures and path setup.
+
+IMPORTANT: the environment override block below runs before any ``app``
+import (pytest imports conftest first), so every test - including the API
+and worker tests - runs against a throwaway database and storage tree.
+"""
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -12,6 +19,12 @@ import pytest
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+
+# ---- test environment isolation (must precede app imports) -----------
+_TEST_ROOT = Path(tempfile.mkdtemp(prefix="v2srt-test-"))
+os.environ["DATABASE_URL"] = f"sqlite:///{(_TEST_ROOT / 'test.db').as_posix()}"
+os.environ["STORAGE_PATH"] = str(_TEST_ROOT / "storage")
+os.environ["MODEL_PATH"] = str(_TEST_ROOT / "models")
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")

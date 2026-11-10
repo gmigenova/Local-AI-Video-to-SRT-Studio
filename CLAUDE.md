@@ -22,14 +22,20 @@ hardcode absolute user paths (§20.11).
 ## Phase tracker
 
 - **Phase 1 DONE** — CLI pipeline: media services, transcription engine,
-  subtitle processor, exporters, 67 passing tests, ruff + mypy clean.
-- **Phase 2 NEXT** — FastAPI + SQLAlchemy 2.x + Alembic, SQLite WAL at
-  `data/database/app.db`, tables per §7 (projects, media_files,
-  transcription_jobs, transcription_segments, subtitles,
-  transcription_settings), SQLite-backed job queue + worker process per §9,
-  REST API per §10 (`/api/v1`), background worker reuses
-  `app.pipeline.TranscriptionPipeline`.
-- Phase 3 — React+Vite+TS frontend (§11). Phase 4 — subtitle editor (§11.5).
+  subtitle processor, exporters; ruff + mypy clean.
+- **Phase 2 DONE** — FastAPI (`app.main:app`, `/api/v1`), SQLAlchemy 2.x +
+  Alembic (initial revision `58b722e639c3`), SQLite WAL at
+  `data/database/app.db`, repositories incl. atomic job claim
+  (`JobsRepository.claim_next`), background worker (`python -m
+  app.workers.worker`) with heartbeat/lock/restart-recovery, upload/export
+  services, subtitle CRUD + reprocess APIs. 85 tests green.
+- **Phase 3 NEXT** — React+Vite+TS frontend (§11): dashboard, projects,
+  upload (drag&drop + audio stream pick), transcription settings,
+  processing screen (polling 1-2s), video player. API base
+  `http://127.0.0.1:8000/api/v1`; video preview via
+  `GET /media/{id}/stream` (Range); CORS already allows Vite dev origin 5173.
+- Phase 4 — subtitle editor (§11.5) incl. shortcuts, undo/redo, auto-save,
+  quality warnings (warnings data available via subtitle rows + rules).
 - Phase 5 — quality/reliability (§19).
 
 ## Architecture invariants (do not break)
