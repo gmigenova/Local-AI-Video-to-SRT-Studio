@@ -67,15 +67,22 @@ export default function SubtitleRow({
       {/* compact row */}
       <button
         onClick={onSelect}
-        className="flex w-full items-start gap-3 px-4 py-2.5 text-left"
+        className="flex w-full items-start gap-2 px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-2.5"
       >
-        <span className="w-7 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-muted">
+        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[10px] tabular-nums text-muted sm:w-7 sm:text-[11px]">
           {index + 1}
         </span>
-        <span className="w-36 shrink-0 pt-0.5 font-mono text-[11px] tabular-nums text-muted">
-          {formatTimestamp(sub.start_ms)}
-          <span className="mx-1 text-muted/50">→</span>
-          {formatTimestamp(sub.end_ms)}
+        {/* mobile: start/end stacked; desktop: single line with arrow */}
+        <span className="w-[4.75rem] shrink-0 pt-0.5 font-mono text-[10px] leading-snug tabular-nums text-muted sm:w-36 sm:text-[11px]">
+          <span className="flex flex-col sm:hidden">
+            <span>{formatTimestamp(sub.start_ms)}</span>
+            <span>{formatTimestamp(sub.end_ms)}</span>
+          </span>
+          <span className="hidden sm:inline">
+            {formatTimestamp(sub.start_ms)}
+            <span className="mx-1 text-muted/50">→</span>
+            {formatTimestamp(sub.end_ms)}
+          </span>
         </span>
         <span className="min-w-0 flex-1 whitespace-pre-line text-sm leading-snug">
           {search ? <Highlighted text={sub.text} search={search} /> : sub.text}
@@ -95,7 +102,7 @@ export default function SubtitleRow({
 
       {/* expanded editor */}
       {selected ? (
-        <div className="space-y-3 border-t border-line/60 bg-surface px-4 pb-4 pt-3">
+        <div className="space-y-3 border-t border-line/60 bg-surface px-3 pb-4 pt-3 sm:px-4">
           <textarea
             ref={textRef}
             className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:border-accent"

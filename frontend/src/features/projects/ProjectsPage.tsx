@@ -16,9 +16,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-semibold">Projects</h1>
-        <Button onClick={() => setShowNew(true)}>
+        <Button onClick={() => setShowNew(true)} className="self-start sm:self-auto">
           <Plus size={15} /> New project
         </Button>
       </div>

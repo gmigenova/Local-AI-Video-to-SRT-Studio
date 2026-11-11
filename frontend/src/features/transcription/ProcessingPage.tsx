@@ -51,7 +51,7 @@ export default function ProcessingPage() {
         <h1 className="text-xl font-semibold">Processing</h1>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">

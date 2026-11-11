@@ -38,14 +38,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Dashboard</h1>
           <p className="mt-1 text-sm text-muted">
             Local AI video transcription — everything runs on this machine.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setShowNew(true)}>
             <Plus size={15} /> New project
           </Button>
@@ -57,7 +57,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard icon={<FolderOpen size={18} />} label="Projects" value={stats.projects} />
         <StatCard icon={<Clapperboard size={18} />} label="Videos" value={stats.videos} />
         <StatCard icon={<CheckCircle2 size={18} />} label="Completed" value={stats.completed} />
@@ -157,11 +157,11 @@ function StatCard({
   value: number
 }) {
   return (
-    <Card className="p-5">
+    <Card className="p-4 sm:p-5">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted">{label}</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
         </div>
         <div className="rounded-lg bg-surface-2 p-2.5 text-muted">{icon}</div>
       </div>

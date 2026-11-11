@@ -147,8 +147,8 @@ function StreamSelector({ mediaId, streams }: { mediaId: string; streams: AudioS
   const current = streamsQuery.data ?? streams
 
   return (
-    <div className="mt-3 flex items-center gap-3 rounded-lg border border-line bg-surface-2/40 px-3 py-2.5">
-      <span className="text-xs font-medium text-muted">Audio track</span>
+    <div className="mt-3 flex flex-col gap-2 rounded-lg border border-line bg-surface-2/40 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+      <span className="shrink-0 text-xs font-medium text-muted">Audio track</span>
       <select
         className={inputClass}
         disabled={select.isPending}

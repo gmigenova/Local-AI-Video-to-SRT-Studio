@@ -201,16 +201,16 @@ export default function SubtitleEditorPage() {
   return (
     <div className="space-y-4">
       {/* toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/projects"
             className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-text"
           >
             <ArrowLeft size={18} />
           </Link>
-          <div>
-            <h1 className="text-lg font-semibold leading-tight">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold leading-tight">
               {media.data?.original_name ?? 'Subtitles'}
             </h1>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
@@ -224,12 +224,22 @@ export default function SubtitleEditorPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <SaveIndicator
-            dirty={editor.dirty}
-            saving={editor.saving}
-            savedAt={editor.savedAt}
-            error={editor.saveError}
-          />
+          <span className="w-full sm:hidden">
+            <SaveIndicator
+              dirty={editor.dirty}
+              saving={editor.saving}
+              savedAt={editor.savedAt}
+              error={editor.saveError}
+            />
+          </span>
+          <span className="hidden sm:inline-flex">
+            <SaveIndicator
+              dirty={editor.dirty}
+              saving={editor.saving}
+              savedAt={editor.savedAt}
+              error={editor.saveError}
+            />
+          </span>
           <Button
             variant="secondary"
             className="px-2"
@@ -415,14 +425,14 @@ export default function SubtitleEditorPage() {
             </Card>
           ) : null}
 
-          <p className="text-xs text-muted">
+          <p className="hidden text-xs text-muted sm:block">
             Space play/pause · ↑↓ navigate · Delete remove · Ctrl+Z/Y undo/redo ·
             Ctrl+S save
           </p>
         </div>
 
         {/* right: subtitle list */}
-        <Card className={cn('flex max-h-[calc(100vh-8rem)] flex-col')}>
+        <Card className={cn('flex max-h-[70dvh] flex-col lg:max-h-[calc(100dvh-8rem)]')}>
           {showSearch ? (
             <SearchReplace
               onClose={() => {

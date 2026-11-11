@@ -57,6 +57,13 @@ hardcode absolute user paths (§20.11).
   never deleted); Docker files (`docker-compose.yml`, backend/frontend
   Dockerfiles, `requirements-gpu.txt`) — UNTESTED on the build machine.
   Logs/heartbeat paths are configurable via `LOGS_PATH` (container-safe).
+- **Post-spec: mobile UI** — app shell is responsive: desktop keeps the
+  sidebar, mobile (< md) gets a top bar + native-style bottom tab bar
+  (safe-area aware, `Layout.tsx`); modals become bottom sheets; all pages
+  are single-column with wrap-friendly headers; editor stacks video over
+  the list with stacked start/end timestamps per row. PWA manifest +
+  icon (`frontend/public/`) make it installable. Verified at 390px: zero
+  horizontal overflow on all pages (CDP-measured).
 - **Post-spec: burn-in video export** — hardsub renders via
   `app/services/render/` (`SubtitleBurner` + `RenderManager`), table
   `video_renders` (migrations `a1c4f7e2b9d8`, `b3e6a1f5c2d9`), APIs

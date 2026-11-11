@@ -23,7 +23,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium',
+        'inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium',
         'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         styles[variant],
         className,
@@ -129,19 +129,22 @@ export function Modal({
 }) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+      {/* mobile: bottom sheet; desktop: centered dialog */}
       <div
         className={cn(
-          'relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-xl border border-line bg-surface shadow-xl nice-scroll',
-          wide ? 'max-w-2xl' : 'max-w-md',
+          'nice-scroll relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-xl sm:max-h-[85vh] sm:rounded-xl sm:pb-0',
+          wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
         )}
       >
+        {/* drag handle (mobile only) */}
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
         <div className="sticky top-0 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
           <h2 className="text-sm font-semibold">{title}</h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-muted transition-colors hover:bg-surface-2 hover:text-text"
+            className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text"
             aria-label="Close"
           >
             <X size={16} />

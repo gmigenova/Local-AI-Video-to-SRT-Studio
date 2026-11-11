@@ -17,9 +17,9 @@ export default function SearchReplace({
   const [result, setResult] = useState<string | null>(null)
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface-2/40 px-4 py-2.5">
+    <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface-2/40 px-3 py-2.5 sm:px-4">
       <input
-        className={`${inputClass} h-8 w-44 py-1`}
+        className={`${inputClass} h-10 w-full py-1 sm:h-8 sm:w-44`}
         placeholder="Find"
         value={search}
         autoFocus
@@ -29,7 +29,7 @@ export default function SearchReplace({
         }}
       />
       <input
-        className={`${inputClass} h-8 w-44 py-1`}
+        className={`${inputClass} h-10 w-full py-1 sm:h-8 sm:w-44`}
         placeholder="Replace with"
         value={replacement}
         onChange={(e) => {

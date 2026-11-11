@@ -65,6 +65,21 @@ body {
     "Segoe UI",
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* mobile-app feel: no text blow-up on rotation, no rubber-band page
+     bounce, no double-tap-zoom delay on controls */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* controls behave like native app chrome (no long-press text selection) */
+button,
+label,
+nav a {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* thin scrollbars for subtitle lists */

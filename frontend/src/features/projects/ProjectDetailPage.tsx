@@ -48,19 +48,24 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/projects" className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-text">
+          <Link
+            to="/projects"
+            className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-text"
+          >
             <ArrowLeft size={18} />
           </Link>
-          <div>
-            <h1 className="text-xl font-semibold">{project.data?.name ?? '…'}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold">{project.data?.name ?? '…'}</h1>
             {project.data?.description ? (
-              <p className="mt-0.5 text-sm text-muted">{project.data.description}</p>
+              <p className="mt-0.5 truncate text-sm text-muted">
+                {project.data.description}
+              </p>
             ) : null}
           </div>
         </div>
-        <Link to={`/projects/${projectId}/upload`}>
+        <Link to={`/projects/${projectId}/upload`} className="self-start sm:self-auto">
           <Button>
             <Upload size={15} /> Upload video
           </Button>
@@ -92,27 +97,46 @@ export default function ProjectDetailPage() {
             {(media.data ?? []).map((file) => {
               const lastJob = projectJobs.find((j) => j.media_id === file.id)
               return (
-                <li key={file.id} className="flex items-center gap-4 px-5 py-4">
-                  <div className="rounded-lg bg-surface-2 p-2.5 text-muted">
-                    <Clapperboard size={18} />
+                <li
+                  key={file.id}
+                  className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="shrink-0 rounded-lg bg-surface-2 p-2.5 text-muted">
+                      <Clapperboard size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{file.original_name}</p>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {formatDuration(file.duration_ms)} · {formatBytes(file.file_size)} ·{' '}
+                        {file.video_codec ?? '?'} / {file.audio_codec ?? '?'}
+                        {file.width ? ` · ${file.width}×${file.height}` : ''}
+                      </p>
+                    </div>
+                    {lastJob ? (
+                      <span className="sm:hidden">
+                        <StatusBadge status={lastJob.status} />
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{file.original_name}</p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatDuration(file.duration_ms)} · {formatBytes(file.file_size)} ·{' '}
-                      {file.video_codec ?? '?'} / {file.audio_codec ?? '?'}
-                      {file.width ? ` · ${file.width}×${file.height}` : ''}
-                    </p>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {lastJob ? (
+                      <span className="hidden sm:inline">
+                        <StatusBadge status={lastJob.status} />
+                      </span>
+                    ) : null}
+                    {lastJob?.status === 'completed' ? (
+                      <Link to={`/jobs/${lastJob.job_id}`}>
+                        <Button variant="secondary">Open result</Button>
+                      </Link>
+                    ) : null}
+                    <Button
+                      onClick={() => setSettingsFor(file)}
+                      disabled={createJob.isPending}
+                    >
+                      <Sparkles size={15} /> Transcribe
+                    </Button>
                   </div>
-                  {lastJob ? <StatusBadge status={lastJob.status} /> : null}
-                  {lastJob?.status === 'completed' ? (
-                    <Link to={`/jobs/${lastJob.job_id}`}>
-                      <Button variant="secondary">Open result</Button>
-                    </Link>
-                  ) : null}
-                  <Button onClick={() => setSettingsFor(file)} disabled={createJob.isPending}>
-                    <Sparkles size={15} /> Transcribe
-                  </Button>
                 </li>
               )
             })}

@@ -31,7 +31,7 @@ export default function Timeline({
   return (
     <div>
       <div
-        className="relative h-10 cursor-crosshair overflow-hidden rounded-lg border border-line bg-surface-2"
+        className="relative h-12 cursor-crosshair touch-none overflow-hidden rounded-lg border border-line bg-surface-2 sm:h-10"
         onClick={handleSeek}
       >
         {subtitles.map((sub) => {
@@ -48,7 +48,7 @@ export default function Timeline({
                 onSelect(sub.key)
                 onSeek(sub.start_ms + 10)
               }}
-              className={`absolute top-1 h-8 rounded-sm transition-colors ${
+              className={`absolute top-1 h-10 rounded-sm transition-colors sm:h-8 ${
                 isSelected
                   ? 'bg-accent ring-1 ring-accent'
                   : isActive
