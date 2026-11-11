@@ -3,26 +3,40 @@
 // Shortcuts: Space play/pause · Ctrl+S save · ↑/↓ navigate · Delete remove ·
 // Ctrl+Z / Ctrl+Y undo/redo.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
+  Braces,
+  Captions,
   Download,
+  FileText,
   FileUp,
   Film,
   Plus,
   Redo2,
   RefreshCw,
   Search,
+  Type,
   Undo2,
+  X,
 } from 'lucide-react'
 
 import { exportUrl } from '../../api/client'
 import { useJob, useMediaItem, useSubtitles } from '../../api/hooks'
 import { api } from '../../api/client'
-import { Badge, Button, Card, Spinner, StatusBadge, cn } from '../../components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  DropdownItem,
+  DropdownMenu,
+  Spinner,
+  StatusBadge,
+  cn,
+} from '../../components/ui'
 import BurnInVideo from './components/BurnInVideo'
 import EditorVideoPlayer from './components/EditorVideoPlayer'
 import Timeline from './components/Timeline'
@@ -215,12 +229,13 @@ export default function SubtitleEditorPage() {
 
   return (
     <div className="space-y-4">
-      {/* toolbar */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      {/* header: title + document-level actions (save state, export, hardsub) */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/projects"
-            className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-text"
+            aria-label="Back to projects"
+            className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-text"
           >
             <ArrowLeft size={18} />
           </Link>
@@ -228,9 +243,9 @@ export default function SubtitleEditorPage() {
             <h1 className="truncate text-lg font-semibold leading-tight">
               {media.data?.original_name ?? 'Subtitles'}
             </h1>
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted">
               <StatusBadge status={job.data.status} />
-              <span>
+              <span className="min-w-0 truncate">
                 {job.data.model_name} ·{' '}
                 {languageName(job.data.detected_language ?? job.data.language)}
               </span>
@@ -239,25 +254,62 @@ export default function SubtitleEditorPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-full sm:hidden">
-            <SaveIndicator
-              dirty={editor.dirty}
-              saving={editor.saving}
-              savedAt={editor.savedAt}
-              error={editor.saveError}
-            />
-          </span>
-          <span className="hidden sm:inline-flex">
-            <SaveIndicator
-              dirty={editor.dirty}
-              saving={editor.saving}
-              savedAt={editor.savedAt}
-              error={editor.saveError}
-            />
-          </span>
+          <SaveIndicator
+            dirty={editor.dirty}
+            saving={editor.saving}
+            savedAt={editor.savedAt}
+            error={editor.saveError}
+          />
+          <DropdownMenu label={<><Download size={15} /> Export</>} title="Download subtitles">
+            <DropdownItem
+              icon={<FileText size={15} />}
+              hint=".srt"
+              href={exportUrl(jobId!, 'srt')}
+              download
+            >
+              SubRip subtitles
+            </DropdownItem>
+            <DropdownItem
+              icon={<Captions size={15} />}
+              hint=".vtt"
+              href={exportUrl(jobId!, 'vtt')}
+              download
+            >
+              WebVTT subtitles
+            </DropdownItem>
+            <DropdownItem
+              icon={<Type size={15} />}
+              hint=".txt"
+              href={exportUrl(jobId!, 'txt')}
+              download
+            >
+              Plain text
+            </DropdownItem>
+            <DropdownItem
+              icon={<Braces size={15} />}
+              hint=".json"
+              href={exportUrl(jobId!, 'json')}
+              download
+            >
+              JSON data
+            </DropdownItem>
+          </DropdownMenu>
           <Button
             variant="secondary"
-            className="px-2"
+            onClick={() => setShowRender((v) => !v)}
+            title="Burn subtitles into the video (hardsub)"
+          >
+            <Film size={15} /> Hardsub
+          </Button>
+        </div>
+      </div>
+
+      {/* toolbar: editing tools left · list-level actions right */}
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="secondary"
+            className="px-2.5"
             onClick={editor.undo}
             disabled={!editor.canUndo}
             title="Undo (Ctrl+Z)"
@@ -266,13 +318,14 @@ export default function SubtitleEditorPage() {
           </Button>
           <Button
             variant="secondary"
-            className="px-2"
+            className="px-2.5"
             onClick={editor.redo}
             disabled={!editor.canRedo}
             title="Redo (Ctrl+Y)"
           >
             <Redo2 size={16} />
           </Button>
+          <ToolbarDivider />
           <Button
             variant="secondary"
             onClick={() => setShowSearch((v) => !v)}
@@ -289,6 +342,29 @@ export default function SubtitleEditorPage() {
             title="Add subtitle after the selected one"
           >
             <Plus size={15} /> Add
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".srt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleImportFile(file)
+              e.target.value = ''
+            }}
+          />
+          <Button
+            variant="secondary"
+            title="Import an external .srt file — preview & edit it like transcribed subtitles"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileUp size={15} />}{' '}
+            Import SRT
           </Button>
           <Button
             variant="secondary"
@@ -326,50 +402,25 @@ export default function SubtitleEditorPage() {
             )}{' '}
             Reprocess
           </Button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".srt"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleImportFile(file)
-              e.target.value = ''
-            }}
-          />
-          <Button
-            variant="secondary"
-            title="Import an external .srt file — preview & edit it like transcribed subtitles"
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing}
-          >
-            {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileUp size={15} />}{' '}
-            Import SRT
-          </Button>
-          {actionError ? (
-            <span className="text-xs text-danger">{actionError}</span>
-          ) : null}
-          <a href={exportUrl(jobId!, 'srt')} download>
-            <Button>
-              <Download size={15} /> SRT
-            </Button>
-          </a>
-          {(['vtt', 'txt', 'json'] as const).map((fmt) => (
-            <a key={fmt} href={exportUrl(jobId!, fmt)} download>
-              <Button variant="secondary" className="capitalize">
-                {fmt}
-              </Button>
-            </a>
-          ))}
-          <Button
-            variant="secondary"
-            onClick={() => setShowRender((v) => !v)}
-            title="Burn subtitles into the video (hardsub)"
-          >
-            <Film size={15} /> Video
-          </Button>
         </div>
       </div>
+
+      {actionError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-sm text-danger"
+        >
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1 break-words">{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss"
+            className="rounded-md p-1 transition-colors hover:bg-danger/15"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ) : null}
 
       {showRender ? (
         <BurnInVideo
@@ -458,9 +509,12 @@ export default function SubtitleEditorPage() {
             </Card>
           ) : null}
 
-          <p className="hidden text-xs text-muted sm:block">
-            Space play/pause · ↑↓ navigate · Delete remove · Ctrl+Z/Y undo/redo ·
-            Ctrl+S save
+          <p className="hidden flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted sm:flex">
+            <Shortcut keys="Space">play/pause</Shortcut>
+            <Shortcut keys="↑ ↓">navigate</Shortcut>
+            <Shortcut keys="Del">remove</Shortcut>
+            <Shortcut keys="Ctrl+Z/Y">undo/redo</Shortcut>
+            <Shortcut keys="Ctrl+S">save</Shortcut>
           </p>
         </div>
 
@@ -522,6 +576,21 @@ export default function SubtitleEditorPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+function ToolbarDivider() {
+  return <span className="mx-0.5 h-6 w-px shrink-0 bg-line" aria-hidden />
+}
+
+function Shortcut({ keys, children }: { keys: string; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted">
+        {keys}
+      </kbd>
+      {children}
+    </span>
   )
 }
 

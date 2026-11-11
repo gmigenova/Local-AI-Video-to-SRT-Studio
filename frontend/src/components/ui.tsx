@@ -1,7 +1,8 @@
 // Minimal UI primitives (shadcn-style, hand-rolled to stay dependency-light).
 
+import { useEffect, useRef, useState } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 
 export function cn(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ')
@@ -30,6 +31,103 @@ export function Button({
       )}
       {...props}
     />
+  )
+}
+
+/** Click-triggered dropdown menu (closes on outside click / Escape / item click). */
+export function DropdownMenu({
+  label,
+  title,
+  variant = 'primary',
+  children,
+}: {
+  label: ReactNode
+  title?: string
+  variant?: ButtonVariant
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <Button
+        variant={variant}
+        title={title}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {label}
+        <ChevronDown
+          size={15}
+          className={cn('shrink-0 transition-transform duration-150', open && 'rotate-180')}
+        />
+      </Button>
+      {open ? (
+        <div
+          role="menu"
+          onClick={() => setOpen(false)}
+          className="absolute right-0 z-40 mt-1.5 min-w-56 origin-top-right rounded-lg border border-line bg-surface py-1 shadow-lg"
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+export function DropdownItem({
+  icon,
+  hint,
+  href,
+  download,
+  onClick,
+  children,
+}: {
+  icon?: ReactNode
+  hint?: string
+  href?: string
+  download?: boolean | string
+  onClick?: () => void
+  children: ReactNode
+}) {
+  const className =
+    'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-text transition-colors hover:bg-surface-2'
+  const content = (
+    <>
+      {icon ? <span className="shrink-0 text-muted">{icon}</span> : null}
+      <span className="flex-1">{children}</span>
+      {hint ? <span className="font-mono text-[11px] text-muted">{hint}</span> : null}
+    </>
+  )
+  if (href !== undefined) {
+    return (
+      <a href={href} download={download} role="menuitem" className={className}>
+        {content}
+      </a>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} role="menuitem" className={className}>
+      {content}
+    </button>
   )
 }
 
