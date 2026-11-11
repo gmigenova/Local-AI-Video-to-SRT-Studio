@@ -38,7 +38,7 @@ export default function EditorVideoPlayer({
 
       {active ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-14 flex justify-center px-6">
-          <p className="whitespace-pre-line rounded bg-black/70 px-3 py-1.5 text-center text-sm text-white">
+          <p className="whitespace-pre-line rounded bg-black/70 px-4 py-2 text-center text-lg leading-snug text-white">
             {active.text || ' '}
           </p>
         </div>

@@ -64,39 +64,35 @@ export default function SubtitleRow({
         active ? 'bg-accent/5' : ''
       } ${selected ? 'bg-surface-2/60' : 'hover:bg-surface-2/30'}`}
     >
-      {/* compact row */}
+      {/* compact row: time line above, subtitle text below (full width) */}
       <button
         onClick={onSelect}
-        className="flex w-full items-start gap-2 px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-2.5"
+        className="flex w-full items-start gap-2.5 px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-3"
       >
-        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[10px] tabular-nums text-muted sm:w-7 sm:text-[11px]">
+        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[10px] tabular-nums text-muted sm:w-7 sm:text-xs">
           {index + 1}
         </span>
-        {/* mobile: start/end stacked; desktop: single line with arrow */}
-        <span className="w-[4.75rem] shrink-0 pt-0.5 font-mono text-[10px] leading-snug tabular-nums text-muted sm:w-36 sm:text-[11px]">
-          <span className="flex flex-col sm:hidden">
+        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {/* meta line: times left · flags right */}
+          <span className="flex items-center gap-2 font-mono text-[10px] leading-none tabular-nums text-muted sm:text-xs">
             <span>{formatTimestamp(sub.start_ms)}</span>
+            <span className="text-muted/50">→</span>
             <span>{formatTimestamp(sub.end_ms)}</span>
-          </span>
-          <span className="hidden sm:inline">
-            {formatTimestamp(sub.start_ms)}
-            <span className="mx-1 text-muted/50">→</span>
-            {formatTimestamp(sub.end_ms)}
-          </span>
-        </span>
-        <span className="min-w-0 flex-1 whitespace-pre-line text-sm leading-snug">
-          {search ? <Highlighted text={sub.text} search={search} /> : sub.text}
-        </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          {sub.is_edited ? <Badge tone="info">edited</Badge> : null}
-          {issues.length > 0 ? (
-            <span
-              title={issues.map((i) => ISSUE_LABELS[i.code] ?? i.code).join(', ')}
-              className="flex items-center"
-            >
-              <AlertTriangle size={14} className="text-warning" />
+            <span className="ml-auto flex items-center gap-1.5 font-sans">
+              {sub.is_edited ? <Badge tone="info">edited</Badge> : null}
+              {issues.length > 0 ? (
+                <span
+                  title={issues.map((i) => ISSUE_LABELS[i.code] ?? i.code).join(', ')}
+                  className="flex items-center"
+                >
+                  <AlertTriangle size={14} className="text-warning" />
+                </span>
+              ) : null}
             </span>
-          ) : null}
+          </span>
+          <span className="min-w-0 whitespace-pre-line text-base leading-normal">
+            {search ? <Highlighted text={sub.text} search={search} /> : sub.text}
+          </span>
         </span>
       </button>
 
@@ -105,7 +101,7 @@ export default function SubtitleRow({
         <div className="space-y-3 border-t border-line/60 bg-surface px-3 pb-4 pt-3 sm:px-4">
           <textarea
             ref={textRef}
-            className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm leading-relaxed outline-none focus:border-accent"
+            className="w-full rounded-md border border-line bg-surface px-3 py-2 text-base leading-relaxed outline-none focus:border-accent"
             rows={Math.min(4, Math.max(2, sub.text.split('\n').length + 1))}
             value={sub.text}
             placeholder="Subtitle text…"
