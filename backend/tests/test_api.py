@@ -107,6 +107,30 @@ class TestHealthAndProjects:
         assert client.delete(f"/api/v1/projects/{pid}").status_code == 204
         assert client.get(f"/api/v1/projects/{pid}").status_code == 404
 
+    def test_project_rename_and_edit(self, client: TestClient):
+        pid = client.post(
+            "/api/v1/projects", json={"name": "Old", "description": "keep me"}
+        ).json()["id"]
+
+        renamed = client.patch(f"/api/v1/projects/{pid}", json={"name": "  New Name  "})
+        assert renamed.status_code == 200
+        body = renamed.json()
+        assert body["name"] == "New Name"  # trimmed
+        assert body["description"] == "keep me"  # untouched by a name-only patch
+
+        cleared = client.patch(f"/api/v1/projects/{pid}", json={"description": ""})
+        assert cleared.status_code == 200
+        assert cleared.json()["description"] is None
+        assert cleared.json()["name"] == "New Name"
+
+        assert (
+            client.patch(f"/api/v1/projects/{pid}", json={"name": "   "}).status_code == 400
+        )
+        assert (
+            client.patch("/api/v1/projects/not-a-uuid", json={"name": "x"}).status_code == 404
+        )
+        client.delete(f"/api/v1/projects/{pid}")
+
 
 class TestProjectDelete:
     """DELETE /projects/{id}: guards + on-disk cleanup."""

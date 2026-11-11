@@ -113,6 +113,12 @@ hardcode absolute user paths (§20.11).
   cleanup now also removes `storage/renders/{render_id}` dirs (previously
   orphaned) alongside uploads/audio/transcripts/subtitles before the DB
   cascade delete.
+- **Post-spec: project rename** — `PATCH /projects/{id}` (partial update via
+  `model_fields_set`: only sent fields apply, name trimmed + 400 on blank,
+  empty string clears the description). UI: pencil button next to the
+  project title on the detail page opens `EditProjectDialog`
+  (name + description); `useUpdateProject` updates the `['project', id]`
+  cache and invalidates the list.
 
 ## Architecture invariants (do not break)
 

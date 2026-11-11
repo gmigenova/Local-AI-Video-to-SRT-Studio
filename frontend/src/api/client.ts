@@ -79,6 +79,11 @@ export const api = {
       body: JSON.stringify({ name, description }),
     }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
+  updateProject: (id: string, body: { name?: string; description?: string }) =>
+    request<Project>(`/projects/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   deleteProject: (id: string) =>
     request<void>(`/projects/${id}`, { method: 'DELETE' }),
 

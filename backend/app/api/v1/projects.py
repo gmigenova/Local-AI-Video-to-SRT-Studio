@@ -13,7 +13,7 @@ from app.models.job import JobStatus
 from app.models.project import Project
 from app.repositories.projects import ProjectsRepository
 from app.repositories.renders import RendersRepository
-from app.schemas.project import ProjectCreate, ProjectOut
+from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter()
 
@@ -50,6 +50,21 @@ def list_projects(
 @router.get("/{project_id}", response_model=ProjectOut)
 def get_project(project_id: str, db: Session = Depends(get_db)) -> ProjectOut:
     return ProjectOut.model_validate(_get_project_or_404(db, project_id))
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+def update_project(
+    project_id: str, payload: ProjectUpdate, db: Session = Depends(get_db)
+) -> ProjectOut:
+    """Rename a project and/or edit its description (partial update)."""
+    project = _get_project_or_404(db, project_id)
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates:
+        updates["name"] = updates["name"].strip()
+        if not updates["name"]:
+            raise HTTPException(status_code=400, detail="Project name cannot be empty.")
+    updated = ProjectsRepository(db).update(project, **updates)
+    return ProjectOut.model_validate(updated)
 
 
 @router.delete("/{project_id}", status_code=204)

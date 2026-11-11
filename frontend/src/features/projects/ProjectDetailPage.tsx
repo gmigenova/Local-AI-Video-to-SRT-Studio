@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Film, Sparkles, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Film, Pencil, Sparkles, Trash2, Upload } from 'lucide-react'
 
 import { useCreateJob, useJobs, useMedia, useProject } from '../../api/hooks'
 import {
@@ -18,6 +18,7 @@ import { useSettingsStore } from '../../stores/settings'
 import { formatBytes, formatDuration, languageName } from '../../utils/format'
 import type { MediaFile } from '../../types'
 import DeleteProjectDialog from './components/DeleteProjectDialog'
+import EditProjectDialog from './components/EditProjectDialog'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams()
@@ -28,6 +29,7 @@ export default function ProjectDetailPage() {
   const createJob = useCreateJob()
   const [settingsFor, setSettingsFor] = useState<MediaFile | null>(null)
   const [showDelete, setShowDelete] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   const mediaIds = useMemo(() => new Set((media.data ?? []).map((m) => m.id)), [media.data])
   const projectJobs = useMemo(
@@ -59,7 +61,19 @@ export default function ProjectDetailPage() {
             <ArrowLeft size={18} />
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold">{project.data?.name ?? '…'}</h1>
+            <div className="flex items-center gap-1.5">
+              <h1 className="truncate text-xl font-semibold">{project.data?.name ?? '…'}</h1>
+              {project.data ? (
+                <button
+                  title="Rename project"
+                  aria-label="Rename project"
+                  className="shrink-0 rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text"
+                  onClick={() => setShowEdit(true)}
+                >
+                  <Pencil size={15} />
+                </button>
+              ) : null}
+            </div>
             {project.data?.description ? (
               <p className="mt-0.5 truncate text-sm text-muted">
                 {project.data.description}
@@ -205,6 +219,10 @@ export default function ProjectDetailPage() {
           onClose={() => setShowDelete(false)}
           onDeleted={() => navigate('/projects')}
         />
+      ) : null}
+
+      {showEdit && project.data ? (
+        <EditProjectDialog project={project.data} onClose={() => setShowEdit(false)} />
       ) : null}
     </div>
   )
