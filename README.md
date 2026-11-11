@@ -1,5 +1,7 @@
 # Local AI Video-to-SRT Studio
 
+<img width="1209" height="929" alt="image" src="https://github.com/user-attachments/assets/489a5211-731c-4c09-bf25-074088f5a6e6" />
+
 Fully local, offline video-to-subtitle (SRT) application. Speech is transcribed
 in the **original language** with Faster-Whisper (CTranslate2) — no cloud AI,
 no translation, no speaker diarization.
