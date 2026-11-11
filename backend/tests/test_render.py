@@ -509,6 +509,72 @@ class TestExternalSrt:
         assert created.json()["subtitle_count"] == 1  # from the fake engine
 
 
+class TestImportSubtitles:
+    """Import an external .srt into the editor (preview + edit like AI subs)."""
+
+    IMPORTED = (
+        b"1\n00:00:00,100 --> 00:00:01,500\nImported line one\n\n"
+        b"2\n00:00:02,000 --> 00:00:04,000\nImported line two\nspans two lines\n"
+    )
+
+    def _upload(self, client, job_id, content=IMPORTED, name="imported.srt"):
+        return client.post(
+            f"/api/v1/jobs/{job_id}/subtitles/import",
+            files={"srt_file": (name, content, "text/plain")},
+        )
+
+    @requires_ffmpeg
+    def test_import_replaces_editor_rows(self, client, completed_job_id):
+        response = self._upload(client, completed_job_id)
+        assert response.status_code == 200, response.text
+        assert response.json()["subtitles"] == 2
+
+        rows = client.get(f"/api/v1/jobs/{completed_job_id}/subtitles").json()
+        assert len(rows) == 2
+        assert rows[0]["text"] == "Imported line one"
+        assert rows[0]["start_ms"] == 100 and rows[0]["end_ms"] == 1500
+        assert rows[0]["is_edited"] is False
+        assert rows[1]["text"] == "Imported line two\nspans two lines"
+
+        # on-disk SRT regenerated with the imported cues
+        srt = (
+            get_settings().storage_subdir("subtitles")
+            / completed_job_id
+            / "output.srt"
+        )
+        content = srt.read_text(encoding="utf-8")
+        assert "Imported line one" in content
+        assert "Imported line two" in content
+
+    @requires_ffmpeg
+    def test_imported_rows_feed_editor_source_render(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        assert self._upload(client, completed_job_id).status_code == 200
+        render_id = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render"
+        ).json()["render_id"]
+        assert manual_render_manager.process_once() == render_id
+        assert client.get(f"/api/v1/renders/{render_id}").json()["status"] == "completed"
+
+        call = manual_render_manager._burner.calls[0]
+        staged = Path(call["srt_path"]).read_text(encoding="utf-8")
+        assert "Imported line one" in staged
+
+    def test_import_rejects_bad_files(self, client, completed_job_id):
+        garbage = self._upload(client, completed_job_id, b"nothing here")
+        assert garbage.status_code == 400
+        assert "cues" in garbage.json()["detail"]
+
+        wrong_ext = self._upload(
+            client, completed_job_id, b"x", name="subs.vtt"
+        )
+        assert wrong_ext.status_code == 400
+
+    def test_import_unknown_job_404(self, client):
+        assert self._upload(client, "nope").status_code == 404
+
+
 # ----------------------------------------------------------------------
 # End-to-end with real FFmpeg
 # ----------------------------------------------------------------------

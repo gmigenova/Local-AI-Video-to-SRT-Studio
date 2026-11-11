@@ -155,20 +155,26 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
           </div>
 
           {useExternal ? (
-            <div className="flex items-center gap-2 text-xs">
-              <input
-                type="file"
-                accept=".srt"
-                className="text-xs"
-                onChange={(e) => void handleFileChosen(e.target.files?.[0] ?? null)}
-              />
-              {file ? (
-                <span className="text-muted">
-                  {cueCount === null ? file.name : `${file.name} · ${cueCount} cues`}
-                </span>
-              ) : (
-                <span className="text-muted">Choose a .srt file</span>
-              )}
+            <div className="flex flex-col gap-1 text-xs">
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".srt"
+                  className="text-xs"
+                  onChange={(e) => void handleFileChosen(e.target.files?.[0] ?? null)}
+                />
+                {file ? (
+                  <span className="text-muted">
+                    {cueCount === null ? file.name : `${file.name} · ${cueCount} cues`}
+                  </span>
+                ) : (
+                  <span className="text-muted">Choose a .srt file</span>
+                )}
+              </div>
+              <span className="text-muted">
+                Tip: use “Import SRT” in the toolbar to preview & edit it in the
+                editor first.
+              </span>
             </div>
           ) : null}
 

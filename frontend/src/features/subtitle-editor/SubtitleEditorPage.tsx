@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Download,
+  FileUp,
   Film,
   Plus,
   Redo2,
@@ -48,8 +49,40 @@ export default function SubtitleEditorPage() {
   const [search, setSearch] = useState('')
   const [showWarnings, setShowWarnings] = useState(false)
   const [showRender, setShowRender] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const loadedToken = useRef(-1)
+  const importInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      if (!jobId) return
+      setImportError(null)
+      if (!file.name.toLowerCase().endsWith('.srt')) {
+        setImportError('Expected a .srt file.')
+        return
+      }
+      if (
+        !window.confirm(
+          'Importing replaces the current subtitle list with the file contents. Continue?',
+        )
+      ) {
+        return
+      }
+      setImporting(true)
+      try {
+        await api.importSubtitles(jobId, file)
+        setReloadToken((t) => t + 1)
+        void queryClient.invalidateQueries({ queryKey: ['subtitles', jobId] })
+      } catch (error) {
+        setImportError(error instanceof Error ? error.message : 'Import failed')
+      } finally {
+        setImporting(false)
+      }
+    },
+    [jobId, queryClient],
+  )
 
   // initialize the working copy once (and after each reprocess)
   useEffect(() => {
@@ -250,6 +283,29 @@ export default function SubtitleEditorPage() {
           >
             <RefreshCw size={15} /> Reprocess
           </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".srt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleImportFile(file)
+              e.target.value = ''
+            }}
+          />
+          <Button
+            variant="secondary"
+            title="Import an external .srt file — preview & edit it like transcribed subtitles"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileUp size={15} />}{' '}
+            Import SRT
+          </Button>
+          {importError ? (
+            <span className="text-xs text-danger">{importError}</span>
+          ) : null}
           <a href={exportUrl(jobId!, 'srt')} download>
             <Button>
               <Download size={15} /> SRT

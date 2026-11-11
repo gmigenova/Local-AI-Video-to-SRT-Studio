@@ -1,8 +1,8 @@
-"""Subtitle endpoints: list, update, bulk-update, reprocess, export (§10.7, §10.8)."""
+"""Subtitle endpoints: list, update, bulk-update, reprocess, export, import."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,12 @@ from app.schemas.subtitle import (
     SubtitleUpdate,
 )
 from app.services.export import ExportJobError, export_job_subtitles
+from app.services.render import (
+    MAX_SRT_BYTES,
+    SrtImportError,
+    decode_srt_bytes,
+    parse_srt,
+)
 from app.services.subtitle import (
     Subtitle,
     SubtitleProcessor,
@@ -191,6 +197,67 @@ def reprocess_subtitles(job_id: str, db: Session = Depends(get_db)) -> dict:
         "subtitles": len(result.subtitles),
         "warnings": len(result.warnings),
     }
+
+
+@router.post("/jobs/{job_id}/subtitles/import")
+def import_subtitles(
+    job_id: str,
+    srt_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Replace the editable subtitles with an external ``.srt`` file.
+
+    The imported cues become normal editor rows: previewed over the video,
+    fully editable, auto-saved, exportable and burnable - exactly like the
+    AI-transcribed ones. Multi-line cue text is preserved.
+    """
+    _get_job_or_404(db, job_id)
+    if not (srt_file.filename or "").lower().endswith(".srt"):
+        raise HTTPException(status_code=400, detail="Expected a .srt subtitle file.")
+    data = srt_file.file.read(MAX_SRT_BYTES + 1)
+    srt_file.file.close()
+    try:
+        cues = parse_srt(decode_srt_bytes(data))
+    except SrtImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    repo = SubtitlesRepository(db)
+    repo.replace_for_job(
+        job_id,
+        [
+            Subtitle(
+                index=i,
+                start_ms=cue.start_ms,
+                end_ms=cue.end_ms,
+                text=cue.text,
+                original_text=cue.text,
+                is_edited=False,
+            )
+            for i, cue in enumerate(cues, start=1)
+        ],
+    )
+    db.commit()
+
+    # keep the on-disk SRT in sync with the imported subtitles
+    rows = repo.list_for_job(job_id)
+    srt_dir = get_settings().storage_subdir("subtitles") / job_id
+    export_subtitles(
+        [
+            Subtitle(
+                index=r.subtitle_index,
+                start_ms=r.start_ms,
+                end_ms=r.end_ms,
+                text=r.text,
+                original_text=r.original_text,
+                is_edited=r.is_edited,
+            )
+            for r in rows
+        ],
+        srt_dir / "output.srt",
+        "srt",
+    )
+
+    return {"job_id": job_id, "subtitles": len(cues)}
 
 
 @router.get("/jobs/{job_id}/export/{fmt}")

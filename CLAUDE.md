@@ -65,6 +65,10 @@ hardcode absolute user paths (§20.11).
   `font_name` + optional `srt_file` — with an external `.srt`
   (validated/normalised by `srt_import.py`, UTF-8 or Thai TIS-874) any job
   status can render; without it the job must be completed with subtitles.
+  External files can also be imported as editable editor rows via
+  `POST /jobs/{id}/subtitles/import` (same parser; replaces the job's
+  subtitle rows + regenerates output.srt — then preview/edit/export/burn
+  work exactly like AI-transcribed subtitles).
   Renders are CPU-only FFmpeg work on a background thread inside the API
   process (lifespan starts/stops the manager) — the AI worker is never
   involved. The filter references the SRT by bare name with `cwd` set to

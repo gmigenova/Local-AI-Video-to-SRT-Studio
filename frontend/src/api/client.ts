@@ -131,6 +131,14 @@ export const api = {
       `/jobs/${jobId}/subtitles/reprocess`,
       { method: 'POST' },
     ),
+  importSubtitles: (jobId: string, file: File) => {
+    const form = new FormData()
+    form.append('srt_file', file)
+    return request<{ job_id: string; subtitles: number }>(
+      `/jobs/${jobId}/subtitles/import`,
+      { method: 'POST', body: form },
+    )
+  },
 
   // video render (subtitle burn-in)
   startRender: (jobId: string, fontName?: string, srtFile?: File | null) => {
