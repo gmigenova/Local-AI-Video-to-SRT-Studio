@@ -57,19 +57,30 @@ export default function SubtitleRow({
 
   const startInvalid = sub.end_ms <= sub.start_ms
 
+  // selection state is exclusive so the two tints never fight in the CSS:
+  //   selected -> accent bar on the left edge + clear accent tint
+  //   active  -> soft accent wash (the cue under the playhead)
+  const rowTone = selected
+    ? 'bg-accent/10 shadow-[inset_3px_0_0_0_var(--accent)]'
+    : active
+      ? 'bg-accent/5'
+      : 'hover:bg-surface-2/40'
+
   return (
     <li
       id={`subtitle-row-${sub.key}`}
-      className={`border-b border-line last:border-b-0 transition-colors ${
-        active ? 'bg-accent/5' : ''
-      } ${selected ? 'bg-surface-2/60' : 'hover:bg-surface-2/30'}`}
+      className={`border-b border-line last:border-b-0 transition-colors ${rowTone}`}
     >
       {/* compact row: time line above, subtitle text below (full width) */}
       <button
         onClick={onSelect}
         className="flex w-full items-start gap-2.5 px-3 py-3 text-left sm:gap-3 sm:px-4 sm:py-3"
       >
-        <span className="w-5 shrink-0 pt-0.5 text-right font-mono text-[10px] tabular-nums text-muted sm:w-7 sm:text-xs">
+        <span
+          className={`w-5 shrink-0 pt-0.5 text-right font-mono text-[10px] tabular-nums sm:w-7 sm:text-xs ${
+            selected ? 'font-semibold text-accent' : 'text-muted'
+          }`}
+        >
           {index + 1}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-1.5">
