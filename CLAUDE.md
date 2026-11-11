@@ -63,7 +63,10 @@ hardcode absolute user paths (§20.11).
   are single-column with wrap-friendly headers; editor stacks video over
   the list with stacked start/end timestamps per row. PWA manifest +
   icon (`frontend/public/`) make it installable. Verified at 390px: zero
-  horizontal overflow on all pages (CDP-measured).
+  horizontal overflow on all pages (CDP-measured). The desktop sidebar is
+  collapsible (icon-only rail, `stores/sidebar.ts` persists the state in
+  localStorage; tooltips via `title` when collapsed; 200ms width
+  transition).
 - **Post-spec: burn-in video export** — hardsub renders via
   `app/services/render/` (`SubtitleBurner` + `RenderManager`), table
   `video_renders` (migrations `a1c4f7e2b9d8`, `b3e6a1f5c2d9`), APIs
