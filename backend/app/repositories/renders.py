@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -37,6 +38,24 @@ class RendersRepository:
 
     def get(self, render_id: str) -> VideoRender | None:
         return self.db.get(VideoRender, render_id)
+
+    def list_for_job(self, job_id: str) -> list[VideoRender]:
+        stmt = (
+            select(VideoRender)
+            .where(VideoRender.job_id == job_id)
+            .order_by(VideoRender.created_at, VideoRender.id)
+        )
+        return list(self.db.scalars(stmt))
+
+    def active_for_jobs(self, job_ids: Sequence[str]) -> list[VideoRender]:
+        """Renders queued/running for any of the given jobs."""
+        if not job_ids:
+            return []
+        stmt = select(VideoRender).where(
+            VideoRender.job_id.in_(list(job_ids)),
+            VideoRender.status.in_(_ACTIVE_VALUES),
+        )
+        return list(self.db.scalars(stmt))
 
     def latest_for_job(self, job_id: str) -> VideoRender | None:
         stmt = (

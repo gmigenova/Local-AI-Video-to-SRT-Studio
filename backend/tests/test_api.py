@@ -108,6 +108,76 @@ class TestHealthAndProjects:
         assert client.get(f"/api/v1/projects/{pid}").status_code == 404
 
 
+class TestProjectDelete:
+    """DELETE /projects/{id}: guards + on-disk cleanup."""
+
+    def _force_status(self, job_id: str, status: JobStatus) -> None:
+        db = get_session_factory()()
+        try:
+            JobsRepository(db).update_status(job_id, status)
+        finally:
+            db.close()
+
+    def test_delete_blocked_while_job_active(
+        self, client: TestClient, project_id: str, media_id: str
+    ):
+        created = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny", "language": None}
+        )
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+
+        blocked = client.delete(f"/api/v1/projects/{project_id}")
+        assert blocked.status_code == 409
+        assert "cancel" in blocked.json()["detail"].lower()
+
+        # terminal jobs no longer block the delete
+        self._force_status(job_id, JobStatus.FAILED)
+        assert client.delete(f"/api/v1/projects/{project_id}").status_code == 204
+        assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
+
+    def test_delete_blocked_while_render_running(
+        self,
+        client: TestClient,
+        project_id: str,
+        media_id: str,
+        worker: JobWorker,
+    ):
+        created = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny", "language": None}
+        )
+        job_id = created.json()["job_id"]
+        assert worker.process_once() == job_id  # completed, subtitles written
+
+        from app.models.render import RenderStatus
+        from app.repositories.renders import RendersRepository
+
+        db = get_session_factory()()
+        try:
+            render = RendersRepository(db).create(job_id=job_id)
+            # 'running' rows are never claimed by the manager loop, so this
+            # state is stable for the duration of the test
+            RendersRepository(db).update_status(render.id, RenderStatus.RUNNING, stage="Burning")
+
+            blocked = client.delete(f"/api/v1/projects/{project_id}")
+            assert blocked.status_code == 409
+            assert "render" in blocked.json()["detail"].lower()
+
+            RendersRepository(db).update_status(
+                render.id, RenderStatus.COMPLETED, complete=True
+            )
+        finally:
+            db.close()
+
+        # with the render finished the project (and its render dir) go away
+        render_dir = get_settings().storage_subdir("renders") / render.id
+        render_dir.mkdir(parents=True, exist_ok=True)
+        (render_dir / "hardsub.mp4").write_bytes(b"f")
+        assert client.delete(f"/api/v1/projects/{project_id}").status_code == 204
+        assert not render_dir.exists()
+        assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
+
+
 class TestUploadValidation:
     def test_reject_unsupported_extension(self, client: TestClient, project_id: str):
         response = client.post(

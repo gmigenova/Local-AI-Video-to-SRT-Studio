@@ -30,6 +30,20 @@ export function useCreateProject() {
   })
 }
 
+export function useDeleteProject() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deleteProject(id),
+    onSuccess: (_data, id) => {
+      client.invalidateQueries({ queryKey: ['projects'] })
+      client.removeQueries({ queryKey: ['project', id] })
+      client.removeQueries({ queryKey: ['media', id] })
+      // jobs/media caches may reference the deleted project's rows
+      client.invalidateQueries({ queryKey: ['jobs'] })
+    },
+  })
+}
+
 export function useProject(id: string | undefined) {
   return useQuery({
     queryKey: ['project', id],

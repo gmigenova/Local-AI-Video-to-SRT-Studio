@@ -104,6 +104,15 @@ hardcode absolute user paths (§20.11).
   APIs: `GET /translation/usage`; translate responses include the updated
   `usage` block, which the Translate dialog (budget bar + per-request
   estimate) and the editor notice display.
+- **Post-spec: project deletion UI** — the `DELETE /projects/{id}` endpoint
+  (existed since Phase 2) is now guarded + surfaced in the UI: trash button
+  on project cards and a Delete button on the project detail page, both
+  opening `DeleteProjectDialog` (shared confirm modal). The endpoint rejects
+  (409) while any job of the project is queued/running/cancelling or a
+  burn-in render is active (`RendersRepository.active_for_jobs`), and the
+  cleanup now also removes `storage/renders/{render_id}` dirs (previously
+  orphaned) alongside uploads/audio/transcripts/subtitles before the DB
+  cascade delete.
 
 ## Architecture invariants (do not break)
 

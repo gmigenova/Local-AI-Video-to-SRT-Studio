@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Clapperboard, Film, Sparkles, Upload } from 'lucide-react'
+import { ArrowLeft, Clapperboard, Film, Sparkles, Trash2, Upload } from 'lucide-react'
 
 import { useCreateJob, useJobs, useMedia, useProject } from '../../api/hooks'
 import {
@@ -17,6 +17,7 @@ import TranscriptionSettingsForm from '../../components/TranscriptionSettingsFor
 import { useSettingsStore } from '../../stores/settings'
 import { formatBytes, formatDuration, languageName } from '../../utils/format'
 import type { MediaFile } from '../../types'
+import DeleteProjectDialog from './components/DeleteProjectDialog'
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams()
@@ -26,6 +27,7 @@ export default function ProjectDetailPage() {
   const jobs = useJobs()
   const createJob = useCreateJob()
   const [settingsFor, setSettingsFor] = useState<MediaFile | null>(null)
+  const [showDelete, setShowDelete] = useState(false)
 
   const mediaIds = useMemo(() => new Set((media.data ?? []).map((m) => m.id)), [media.data])
   const projectJobs = useMemo(
@@ -65,11 +67,22 @@ export default function ProjectDetailPage() {
             ) : null}
           </div>
         </div>
-        <Link to={`/projects/${projectId}/upload`} className="self-start sm:self-auto">
-          <Button>
-            <Upload size={15} /> Upload video
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <Link to={`/projects/${projectId}/upload`}>
+            <Button>
+              <Upload size={15} /> Upload video
+            </Button>
+          </Link>
+          {project.data ? (
+            <Button
+              variant="danger"
+              title="Delete this project and everything in it"
+              onClick={() => setShowDelete(true)}
+            >
+              <Trash2 size={15} /> Delete
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <Card>
@@ -185,6 +198,14 @@ export default function ProjectDetailPage() {
           submitting={createJob.isPending}
         />
       </Modal>
+
+      {showDelete && project.data ? (
+        <DeleteProjectDialog
+          project={project.data}
+          onClose={() => setShowDelete(false)}
+          onDeleted={() => navigate('/projects')}
+        />
+      ) : null}
     </div>
   )
 }

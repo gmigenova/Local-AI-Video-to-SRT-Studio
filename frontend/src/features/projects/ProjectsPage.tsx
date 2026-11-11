@@ -1,11 +1,13 @@
-// Projects list (§11.1 actions: New Project, Open Project).
+// Projects list (§11.1 actions: New Project, Open Project, Delete).
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronRight, FolderOpen, Plus } from 'lucide-react'
+import { ChevronRight, FolderOpen, Plus, Trash2 } from 'lucide-react'
 
 import { useCreateProject, useProjects } from '../../api/hooks'
+import type { Project } from '../../types'
 import { Button, Card, EmptyState, Field, Modal, inputClass } from '../../components/ui'
+import DeleteProjectDialog from './components/DeleteProjectDialog'
 
 export default function ProjectsPage() {
   const projects = useProjects()
@@ -13,6 +15,7 @@ export default function ProjectsPage() {
   const [showNew, setShowNew] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [deleting, setDeleting] = useState<Project | null>(null)
 
   return (
     <div className="space-y-6">
@@ -41,10 +44,24 @@ export default function ProjectsPage() {
               <Card className="group p-5 transition-colors hover:border-accent/50">
                 <div className="flex items-start justify-between">
                   <FolderOpen size={20} className="text-accent" />
-                  <ChevronRight
-                    size={16}
-                    className="text-muted transition-transform group-hover:translate-x-0.5"
-                  />
+                  <span className="flex items-center gap-1">
+                    <button
+                      title="Delete project"
+                      aria-label={`Delete ${project.name}`}
+                      className="rounded-md p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setDeleting(project)
+                      }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                    <ChevronRight
+                      size={16}
+                      className="text-muted transition-transform group-hover:translate-x-0.5"
+                    />
+                  </span>
                 </div>
                 <p className="mt-3 truncate text-sm font-semibold">{project.name}</p>
                 <p className="mt-1 line-clamp-2 min-h-[2rem] text-xs text-muted">
@@ -58,6 +75,10 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
+
+      {deleting ? (
+        <DeleteProjectDialog project={deleting} onClose={() => setDeleting(null)} />
+      ) : null}
 
       <Modal open={showNew} title="New project" onClose={() => setShowNew(false)}>
         <form
