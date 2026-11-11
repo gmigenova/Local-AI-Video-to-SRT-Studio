@@ -2,7 +2,7 @@
 // bottom tab bar (native-app style). Worker status + theme toggle everywhere.
 // The collapse state persists per viewer (localStorage, stores/sidebar.ts).
 
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   Clapperboard,
   LayoutDashboard,
@@ -48,6 +48,7 @@ export default function Layout() {
   const toggle = useThemeStore((s) => s.toggle)
   const collapsed = useSidebarStore((s) => s.collapsed)
   const toggleSidebar = useSidebarStore((s) => s.toggle)
+  const location = useLocation()
 
   return (
     <div className="flex h-dvh flex-col md:flex-row">
@@ -147,7 +148,10 @@ export default function Layout() {
       </aside>
 
       <main className="nice-scroll flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-4 pb-28 pt-4 md:px-8 md:pb-8 md:pt-8">
+        <div
+          key={location.pathname}
+          className="animate-fade-in mx-auto max-w-6xl px-4 pb-28 pt-4 md:px-8 md:pb-8 md:pt-8"
+        >
           <Outlet />
         </div>
       </main>

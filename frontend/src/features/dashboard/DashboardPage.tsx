@@ -158,12 +158,12 @@ function StatCard({
 }) {
   return (
     <Card className="p-4 sm:p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted">{label}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs text-muted">{label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
         </div>
-        <div className="rounded-lg bg-surface-2 p-2.5 text-muted">{icon}</div>
+        <div className="shrink-0 rounded-lg bg-accent/10 p-2.5 text-accent">{icon}</div>
       </div>
     </Card>
   )

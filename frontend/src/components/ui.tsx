@@ -25,7 +25,8 @@ export function Button({
     <button
       className={cn(
         'inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium',
-        'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+        'transition-[colors,transform] duration-100 active:scale-[0.98]',
+        'disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100',
         styles[variant],
         className,
       )}
@@ -84,7 +85,7 @@ export function DropdownMenu({
         <div
           role="menu"
           onClick={() => setOpen(false)}
-          className="absolute right-0 z-40 mt-1.5 min-w-56 origin-top-right rounded-lg border border-line bg-surface py-1 shadow-lg"
+          className="animate-scale-in absolute right-0 z-40 mt-1.5 min-w-56 origin-top-right rounded-lg border border-line bg-surface py-1 shadow-raised"
         >
           {children}
         </div>
@@ -134,7 +135,7 @@ export function DropdownItem({
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-xl border border-line bg-surface shadow-sm', className)}
+      className={cn('rounded-xl border border-line bg-surface shadow-card', className)}
       {...props}
     />
   )
@@ -188,10 +189,14 @@ export function Badge({
 
 export function Progress({ value }: { value: number }) {
   const pct = Math.min(100, Math.max(0, value))
+  const done = pct >= 100
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-surface-2">
       <div
-        className="h-full rounded-full bg-accent transition-[width] duration-500"
+        className={cn(
+          'h-full rounded-full bg-accent transition-[width] duration-500',
+          !done && 'progress-sheen',
+        )}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -232,7 +237,7 @@ export function Modal({
       {/* mobile: bottom sheet; desktop: centered dialog */}
       <div
         className={cn(
-          'nice-scroll relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-xl sm:max-h-[85vh] sm:rounded-xl sm:pb-0',
+          'animate-slide-up nice-scroll relative z-10 max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-raised sm:max-h-[85vh] sm:animate-scale-in sm:rounded-xl sm:pb-0',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-md',
         )}
       >

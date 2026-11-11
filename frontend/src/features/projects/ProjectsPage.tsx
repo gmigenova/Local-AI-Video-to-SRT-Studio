@@ -41,7 +41,7 @@ export default function ProjectsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(projects.data ?? []).map((project) => (
             <Link key={project.id} to={`/projects/${project.id}`}>
-              <Card className="group p-5 transition-colors hover:border-accent/50">
+              <Card className="group p-5 transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-raised">
                 <div className="flex items-start justify-between">
                   <FolderOpen size={20} className="text-accent" />
                   <span className="flex items-center gap-1">

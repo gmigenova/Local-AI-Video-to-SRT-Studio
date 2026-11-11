@@ -130,6 +130,18 @@ hardcode absolute user paths (§20.11).
   before removing anything; `remove_media_artifacts` does the rmtree pass).
   UI: per-row trash button on the project detail page opens
   `DeleteMediaDialog`; `useDeleteMedia` invalidates the media list + jobs.
+- **Post-spec: visual polish** (`index.css` + `ui.tsx`) — theme-aware
+  elevation tokens (`--shadow-1/2` → utilities `shadow-card`/`shadow-raised`;
+  dark mode adds an inset top highlight), a barely-there fixed accent radial
+  gradient on `body` (`--ambient`, per theme), accent `::selection`, a global
+  `:focus-visible` ring, and a motion language: route-level fade-in
+  (`Layout` keys the outlet wrapper on pathname), modals slide-up (mobile) /
+  scale-in (desktop), dropdowns scale-in from origin, button
+  `active:scale-[0.98]`, progress bars get a `progress-sheen` while < 100%.
+  Everything is gated by a `prefers-reduced-motion` kill switch.
+  **No external font loading** — a Google Fonts link made first paint hang
+  on machines without internet (this is a local-first app); the stack stays
+  Inter→system-ui/Segoe UI Variable with graceful fallback.
 
 ## Architecture invariants (do not break)
 
