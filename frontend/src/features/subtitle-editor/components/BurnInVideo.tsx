@@ -1,12 +1,13 @@
 // Subtitle burn-in (hardsub) panel: re-encodes the original video with the
-// current subtitles permanently rendered into the picture, then download.
+// subtitles permanently rendered into the picture, then download.
+// Subtitle source: the current editor rows, or an external .srt file.
 
 import { useState } from 'react'
 import { Download, Film, X } from 'lucide-react'
 
 import { renderDownloadUrl } from '../../../api/client'
 import { useCancelRender, useRender, useStartRender } from '../../../api/hooks'
-import { Badge, Button, Progress, Spinner, inputClass } from '../../../components/ui'
+import { Badge, Button, Progress, Spinner, cn, inputClass } from '../../../components/ui'
 import { ACTIVE_RENDER_STATUSES } from '../../../types'
 import { formatBytes } from '../../../utils/format'
 
@@ -19,27 +20,57 @@ interface Props {
   onClose: () => void
 }
 
+/** Best-effort client-side cue count, for display only (backend re-validates). */
+async function countCues(file: File): Promise<number | null> {
+  try {
+    const buffer = await file.arrayBuffer()
+    let text: string
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    } catch {
+      text = new TextDecoder('windows-874').decode(buffer)
+    }
+    const matches = text.match(/-->/g)
+    return matches ? matches.length : 0
+  } catch {
+    return null
+  }
+}
+
 export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
   const renderQuery = useRender(jobId)
   const startRender = useStartRender()
   const cancelRender = useCancelRender()
+  const [useExternal, setUseExternal] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const [cueCount, setCueCount] = useState<number | null>(null)
   const [fontName, setFontName] = useState('')
   const [startError, setStartError] = useState<string | null>(null)
 
   const render = renderQuery.data
   const active = render != null && ACTIVE_RENDER_STATUSES.includes(render.status)
+  const canStart = !useExternal || file !== null
+
+  async function handleFileChosen(chosen: File | null) {
+    setFile(chosen)
+    setCueCount(null)
+    if (chosen) setCueCount(await countCues(chosen))
+  }
 
   async function handleStart() {
     setStartError(null)
-    const saved = await onBeforeStart()
-    if (!saved) {
-      setStartError('Could not save your changes — fix the save error and try again.')
-      return
+    if (!useExternal || file) {
+      const saved = await onBeforeStart()
+      if (!saved) {
+        setStartError('Could not save your changes — fix the save error and try again.')
+        return
+      }
     }
     try {
       await startRender.mutateAsync({
         jobId,
         fontName: fontName.trim() || undefined,
+        srtFile: useExternal ? file : null,
       })
     } catch (error) {
       setStartError(error instanceof Error ? error.message : 'Could not start the render.')
@@ -56,11 +87,12 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
         <div className="flex min-w-56 flex-1 flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs text-muted">
             <span>
+              {render.source === 'external' ? 'External SRT · ' : 'Editor subtitles · '}
               {render.status === 'queued'
-                ? 'Waiting in queue…'
+                ? 'waiting in queue…'
                 : render.status === 'cancelling'
-                  ? 'Cancelling…'
-                  : 'Rendering video (H.264)…'}
+                  ? 'cancelling…'
+                  : 'rendering video (H.264)…'}
             </span>
             <span>{Math.round(render.progress)}%</span>
           </div>
@@ -79,7 +111,10 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
         </div>
       ) : render?.status === 'completed' ? (
         <div className="flex flex-1 flex-wrap items-center gap-2">
-          <Badge tone="success">Video ready ({formatBytes(render.file_size)})</Badge>
+          <Badge tone="success">
+            Video ready ({formatBytes(render.file_size)})
+            {render.source === 'external' ? ' · external SRT' : ''}
+          </Badge>
           <a href={renderDownloadUrl(render.render_id)} download>
             <Button>
               <Download size={15} /> Download video
@@ -96,8 +131,49 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
             <Badge tone="danger">{render.error_message ?? 'Render failed'}</Badge>
           ) : null}
           {render?.status === 'cancelled' ? <Badge tone="info">Cancelled</Badge> : null}
+
+          {/* subtitle source selector */}
+          <div className="flex overflow-hidden rounded-lg border border-line text-xs">
+            <button
+              className={cn(
+                'px-2.5 py-1.5',
+                !useExternal ? 'bg-primary text-primary-foreground' : 'text-muted',
+              )}
+              onClick={() => setUseExternal(false)}
+            >
+              Editor subtitles
+            </button>
+            <button
+              className={cn(
+                'px-2.5 py-1.5',
+                useExternal ? 'bg-primary text-primary-foreground' : 'text-muted',
+              )}
+              onClick={() => setUseExternal(true)}
+            >
+              External .srt file
+            </button>
+          </div>
+
+          {useExternal ? (
+            <div className="flex items-center gap-2 text-xs">
+              <input
+                type="file"
+                accept=".srt"
+                className="text-xs"
+                onChange={(e) => void handleFileChosen(e.target.files?.[0] ?? null)}
+              />
+              {file ? (
+                <span className="text-muted">
+                  {cueCount === null ? file.name : `${file.name} · ${cueCount} cues`}
+                </span>
+              ) : (
+                <span className="text-muted">Choose a .srt file</span>
+              )}
+            </div>
+          ) : null}
+
           <input
-            className={`${inputClass} w-48`}
+            className={`${inputClass} w-44`}
             list="burn-font-suggestions"
             placeholder="Font (optional, e.g. Thai font)"
             value={fontName}
@@ -108,7 +184,7 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
               <option key={font} value={font} />
             ))}
           </datalist>
-          <Button onClick={() => void handleStart()} disabled={startRender.isPending}>
+          <Button onClick={() => void handleStart()} disabled={startRender.isPending || !canStart}>
             {startRender.isPending ? <Spinner className="h-3.5 w-3.5" /> : <Film size={15} />}
             {render ? 'Try again' : 'Render video'}
           </Button>

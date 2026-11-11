@@ -52,6 +52,9 @@ class VideoRender(Base):
     status: Mapped[str] = mapped_column(
         String(30), default=RenderStatus.QUEUED.value, index=True
     )
+    #: where the burned subtitles came from: "editor" (the job's current
+    #: subtitle rows) or "external" (a user-supplied .srt file).
+    source: Mapped[str] = mapped_column(String(20), default="editor")
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     current_stage: Mapped[str | None] = mapped_column(String(100))
     error_message: Mapped[str | None] = mapped_column(Text)

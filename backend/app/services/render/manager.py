@@ -127,46 +127,51 @@ class RenderManager:
                 return
             job = render.job
             media = job.media
-            rows = SubtitlesRepository(db).list_for_job(render.job_id)
-            if not rows:
-                repo.update_status(
-                    render_id,
-                    RenderStatus.FAILED,
-                    stage="Failed",
-                    error="This job has no subtitles to burn.",
-                    complete=True,
-                )
-                return
 
             render_dir = self.settings.storage_subdir("renders") / render_id
             srt_path = render_dir / RENDER_SRT_NAME
             output_path = render_dir / "output.mp4"
             render_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                export_subtitles(
-                    [
-                        Subtitle(
-                            index=r.subtitle_index,
-                            start_ms=r.start_ms,
-                            end_ms=r.end_ms,
-                            text=r.text,
-                            original_text=r.original_text,
-                            is_edited=r.is_edited,
-                        )
-                        for r in rows
-                    ],
-                    srt_path,
-                    "srt",
-                )
-            except VideoToSrtError as exc:
-                repo.update_status(
-                    render_id,
-                    RenderStatus.FAILED,
-                    stage="Failed",
-                    error=str(exc),
-                    complete=True,
-                )
-                return
+
+            if render.source == "external" and srt_path.is_file():
+                # an uploaded SRT was validated + staged at creation time
+                logger.info("Render %s uses an external SRT.", render_id)
+            else:
+                rows = SubtitlesRepository(db).list_for_job(render.job_id)
+                if not rows:
+                    repo.update_status(
+                        render_id,
+                        RenderStatus.FAILED,
+                        stage="Failed",
+                        error="This job has no subtitles to burn.",
+                        complete=True,
+                    )
+                    return
+                try:
+                    export_subtitles(
+                        [
+                            Subtitle(
+                                index=r.subtitle_index,
+                                start_ms=r.start_ms,
+                                end_ms=r.end_ms,
+                                text=r.text,
+                                original_text=r.original_text,
+                                is_edited=r.is_edited,
+                            )
+                            for r in rows
+                        ],
+                        srt_path,
+                        "srt",
+                    )
+                except VideoToSrtError as exc:
+                    repo.update_status(
+                        render_id,
+                        RenderStatus.FAILED,
+                        stage="Failed",
+                        error=str(exc),
+                        complete=True,
+                    )
+                    return
 
             cancel_event = threading.Event()
             self._cancel_events[render_id] = cancel_event

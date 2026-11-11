@@ -23,6 +23,12 @@ from app.models.render import RenderStatus
 from app.repositories.renders import RendersRepository
 from app.services.render.burner import BurnResult, build_burn_args, sanitize_font_name
 from app.services.render.manager import RenderManager, set_render_manager
+from app.services.render.srt_import import (
+    SrtImportError,
+    decode_srt_bytes,
+    normalise_srt,
+    parse_srt,
+)
 
 
 # ----------------------------------------------------------------------
@@ -152,6 +158,53 @@ def completed_job_id(client: TestClient, media_id: str) -> str:
 # ----------------------------------------------------------------------
 # Unit: argument building (no FFmpeg needed)
 # ----------------------------------------------------------------------
+class TestSrtImport:
+    VALID = "1\n00:00:01,000 --> 00:00:03,500\nHello world\n\n2\n00:00:04,000 --> 00:00:06,000\nSecond cue\nwith two lines\n"
+
+    def test_parse_valid(self):
+        cues = parse_srt(self.VALID)
+        assert len(cues) == 2
+        assert cues[0].start_ms == 1000 and cues[0].end_ms == 3500
+        assert cues[1].text == "Second cue\nwith two lines"
+
+    def test_parse_tolerates_crlf_bom_and_dot_millis(self):
+        raw = (
+            "﻿1\r\n00:00:01.000 --> 00:00:02.000\r\nHi\r\n\r\n"
+            "2\r\n0:00:03,00 --> 0:00:04,0\r\nShort forms\r\n"
+        )
+        cues = parse_srt(raw)
+        assert len(cues) == 2
+        assert cues[1].start_ms == 3000  # '00' millis padded, 1-digit hour ok
+
+    def test_parse_without_block_indexes(self):
+        cues = parse_srt("00:00:01,000 --> 00:00:02,000\nNo index line\n")
+        assert len(cues) == 1
+        assert cues[0].text == "No index line"
+
+    def test_parse_rejects_garbage(self):
+        with pytest.raises(SrtImportError):
+            parse_srt("this is not a subtitle file\nat all\n\n")
+        with pytest.raises(SrtImportError):
+            parse_srt("")
+        # end <= start and empty text blocks are skipped; none valid -> error
+        with pytest.raises(SrtImportError):
+            parse_srt("1\n00:00:05,000 --> 00:00:02,000\nbackwards\n")
+
+    def test_decode_cp874_thai(self):
+        thai = "สวัสดี".encode("cp874")
+        assert decode_srt_bytes(thai) == "สวัสดี"
+        assert decode_srt_bytes(b"hello") == "hello"
+        assert decode_srt_bytes(b"\xef\xbb\xbfhello") == "hello"  # BOM stripped
+
+    def test_normalise_roundtrip(self):
+        text, count = normalise_srt(self.VALID.encode("utf-8"))
+        assert count == 2
+        assert text.startswith("1\n00:00:01,000 --> 00:00:03,500\n")
+        assert "สวัสดี" in normalise_srt(
+            "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encode("cp874")
+        )[0]
+
+
 class TestBuildBurnArgs:
     def test_basic_structure(self, tmp_path: Path):
         args = build_burn_args(
@@ -304,7 +357,7 @@ class TestRenderApi:
 
         created = client.post(
             f"/api/v1/jobs/{completed_job_id}/render",
-            json={"font_name": "Tahoma"},
+            data={"font_name": "Tahoma"},
         )
         assert created.status_code == 201, created.text
         body = created.json()
@@ -383,6 +436,77 @@ class TestRenderApi:
 
         # a cancelled render can no longer be cancelled
         assert client.post(f"/api/v1/renders/{render_id}/cancel").status_code == 409
+
+
+class TestExternalSrt:
+    EXTERNAL_SRT = (
+        b"1\n00:00:00,200 --> 00:00:01,800\nExternal one\n\n"
+        b"2\n00:00:01,900 --> 00:00:03,500\nExternal two\n"
+    )
+
+    @requires_ffmpeg
+    def test_render_with_external_srt(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        created = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            files={"srt_file": ("external.srt", self.EXTERNAL_SRT, "text/plain")},
+            data={"font_name": "Tahoma"},
+        )
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["source"] == "external"
+        assert body["subtitle_count"] == 2
+        render_id = body["render_id"]
+
+        assert manual_render_manager.process_once() == render_id
+        done = client.get(f"/api/v1/renders/{render_id}").json()
+        assert done["status"] == "completed"
+        assert done["source"] == "external"
+
+        # the burner burned the uploaded (normalised) SRT, not the DB rows
+        call = manual_render_manager._burner.calls[0]
+        staged = Path(call["srt_path"]).read_text(encoding="utf-8")
+        assert "External one" in staged
+        assert "External two" in staged
+
+    def test_external_srt_skips_completed_check(self, client, media_id, clean_renders):
+        # a queued (not completed) job + external SRT is allowed
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}
+        ).json()["job_id"]
+        created = client.post(
+            f"/api/v1/jobs/{job_id}/render",
+            files={"srt_file": ("external.srt", self.EXTERNAL_SRT, "text/plain")},
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["source"] == "external"
+
+    def test_rejects_bad_srt(self, client, completed_job_id, clean_renders):
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            files={"srt_file": ("bad.srt", b"not a subtitle file", "text/plain")},
+        )
+        assert response.status_code == 400
+        assert "cues" in response.json()["detail"]
+
+    def test_rejects_wrong_extension(self, client, completed_job_id, clean_renders):
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            files={"srt_file": ("subs.vtt", b"WEBVTT\n\n00:01.000 --> 00:02.000\nx\n",
+                                "text/vtt")},
+        )
+        assert response.status_code == 400
+        assert ".srt" in response.json()["detail"]
+
+    @requires_ffmpeg
+    def test_editor_source_uses_db_rows(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        created = client.post(f"/api/v1/jobs/{completed_job_id}/render")
+        assert created.status_code == 201, created.text
+        assert created.json()["source"] == "editor"
+        assert created.json()["subtitle_count"] == 1  # from the fake engine
 
 
 # ----------------------------------------------------------------------

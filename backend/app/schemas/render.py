@@ -7,17 +7,11 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class RenderCreateRequest(BaseModel):
-    font_name: str | None = Field(
-        default=None,
-        max_length=100,
-        description="Optional font override for burned subtitles (e.g. a Thai font).",
-    )
-
-
 class RenderCreated(BaseModel):
     render_id: str
     status: str
+    source: str = "editor"
+    subtitle_count: int | None = None
 
 
 class RenderOut(BaseModel):
@@ -26,6 +20,7 @@ class RenderOut(BaseModel):
     render_id: str = Field(validation_alias="id")
     job_id: str
     status: str
+    source: str
     progress: float
     current_stage: str | None
     error_message: str | None

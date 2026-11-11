@@ -59,13 +59,17 @@ hardcode absolute user paths (§20.11).
   Logs/heartbeat paths are configurable via `LOGS_PATH` (container-safe).
 - **Post-spec: burn-in video export** — hardsub renders via
   `app/services/render/` (`SubtitleBurner` + `RenderManager`), table
-  `video_renders` (migration `a1c4f7e2b9d8`), APIs
+  `video_renders` (migrations `a1c4f7e2b9d8`, `b3e6a1f5c2d9`), APIs
   `POST /jobs/{id}/render`, `GET /jobs/{id}/render`, `GET/POST
-  /renders/{id}(/cancel|/download)`. Renders are CPU-only FFmpeg work on a
-  background thread inside the API process (lifespan starts/stops the
-  manager) — the AI worker is never involved. The filter references the SRT
-  by bare name with `cwd` set to the render dir (no Windows drive-colon
-  escaping). Renders are NOT covered by retention cleanup.
+  /renders/{id}(/cancel|/download)`. The POST accepts multipart form:
+  `font_name` + optional `srt_file` — with an external `.srt`
+  (validated/normalised by `srt_import.py`, UTF-8 or Thai TIS-874) any job
+  status can render; without it the job must be completed with subtitles.
+  Renders are CPU-only FFmpeg work on a background thread inside the API
+  process (lifespan starts/stops the manager) — the AI worker is never
+  involved. The filter references the SRT by bare name with `cwd` set to
+  the render dir (no Windows drive-colon escaping). Renders are NOT
+  covered by retention cleanup.
 
 ## Architecture invariants (do not break)
 

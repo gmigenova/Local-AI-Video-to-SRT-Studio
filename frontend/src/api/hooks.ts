@@ -148,8 +148,15 @@ export function useRender(jobId: string | undefined) {
 export function useStartRender() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ jobId, fontName }: { jobId: string; fontName?: string }) =>
-      api.startRender(jobId, fontName),
+    mutationFn: ({
+      jobId,
+      fontName,
+      srtFile,
+    }: {
+      jobId: string
+      fontName?: string
+      srtFile?: File | null
+    }) => api.startRender(jobId, fontName, srtFile),
     onSuccess: (_data, variables) =>
       client.invalidateQueries({ queryKey: ['render', variables.jobId] }),
   })

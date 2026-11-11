@@ -144,6 +144,7 @@ export interface VideoRender {
   render_id: string
   job_id: string
   status: RenderStatus
+  source: 'editor' | 'external'
   progress: number
   current_stage: string | null
   error_message: string | null

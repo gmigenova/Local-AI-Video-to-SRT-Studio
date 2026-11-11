@@ -20,10 +20,13 @@ class RendersRepository:
         self.db = db
 
     # -- CRUD ----------------------------------------------------------
-    def create(self, job_id: str, font_name: str | None = None) -> VideoRender:
+    def create(
+        self, job_id: str, font_name: str | None = None, source: str = "editor"
+    ) -> VideoRender:
         render = VideoRender(
             job_id=job_id,
             font_name=font_name,
+            source=source,
             status=RenderStatus.QUEUED.value,
             current_stage="Queued",
         )

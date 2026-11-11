@@ -29,9 +29,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isForm = init?.body instanceof FormData
   const response = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    // multipart bodies must let the browser set the boundary header
+    headers: isForm
+      ? init?.headers
+      : { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   })
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -129,11 +133,20 @@ export const api = {
     ),
 
   // video render (subtitle burn-in)
-  startRender: (jobId: string, fontName?: string) =>
-    request<{ render_id: string; status: string }>(`/jobs/${jobId}/render`, {
+  startRender: (jobId: string, fontName?: string, srtFile?: File | null) => {
+    const form = new FormData()
+    if (fontName) form.append('font_name', fontName)
+    if (srtFile) form.append('srt_file', srtFile)
+    return request<{
+      render_id: string
+      status: string
+      source: 'editor' | 'external'
+      subtitle_count: number | null
+    }>(`/jobs/${jobId}/render`, {
       method: 'POST',
-      body: JSON.stringify(fontName ? { font_name: fontName } : {}),
-    }),
+      body: form,
+    })
+  },
   getLatestRender: (jobId: string) =>
     request<VideoRender>(`/jobs/${jobId}/render`),
   cancelRender: (renderId: string) =>
