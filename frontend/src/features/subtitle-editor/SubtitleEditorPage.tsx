@@ -165,14 +165,27 @@ export default function SubtitleEditorPage() {
   const selectIndex = useCallback(
     (index: number) => {
       if (index < 0 || index >= editor.subs.length) return
-      const key = editor.subs[index].key
-      setSelectedKey(key)
-      document.getElementById(`subtitle-row-${key}`)?.scrollIntoView({
+      const row = editor.subs[index]
+      setSelectedKey(row.key)
+      seek(row.start_ms + 10) // follow selection: video jumps to the cue
+      document.getElementById(`subtitle-row-${row.key}`)?.scrollIntoView({
         behavior: 'smooth',
         block: 'nearest',
       })
     },
-    [editor.subs],
+    [editor.subs, seek],
+  )
+
+  /** Click on a subtitle row: select it and seek the video to its cue.
+   *  Only when the selection CHANGES - re-clicking the already-selected row
+   *  (e.g. to re-read its text) must not restart the video position. */
+  const selectRow = useCallback(
+    (key: string, startMs: number) => {
+      if (key === selectedKey) return
+      setSelectedKey(key)
+      seek(startMs + 10)
+    },
+    [selectedKey, seek],
   )
 
   // global keyboard shortcuts (§11.5)
@@ -620,7 +633,7 @@ export default function SubtitleEditorPage() {
                   issues={issues.get(sub.key) ?? []}
                   isLast={index === editor.subs.length - 1}
                   search={search}
-                  onSelect={() => setSelectedKey(sub.key)}
+                  onSelect={() => selectRow(sub.key, sub.start_ms)}
                   onTextChange={(text) => editor.setText(sub.key, text)}
                   onTimesChange={(start, end) => editor.setTimes(sub.key, start, end)}
                   onSplit={() => {
