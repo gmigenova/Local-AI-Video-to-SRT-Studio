@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     # Google Cloud Translation API (subtitle translation; empty key = disabled)
     google_translate_api_key: str = ""
     google_translate_timeout_seconds: float = 30.0
+    #: monthly character budget (Google meters per character); 0 = unlimited
+    google_translate_monthly_char_limit: int = 500_000
 
     # Retention / automatic cleanup (days; 0 disables the rule)
     retention_temp_days: int = 7

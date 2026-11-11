@@ -40,6 +40,20 @@ class TranslatedTextItem(BaseModel):
     text: str
 
 
+class TranslationUsageOut(BaseModel):
+    """Cumulative Google Cloud Translation usage for the current month."""
+
+    period: str
+    characters_sent: int
+    words_sent: int
+    texts_translated: int
+    requests: int
+    jobs: int
+    #: configured monthly character budget; 0 = unlimited
+    monthly_char_limit: int
+    remaining_chars: int | None = None  # None when unlimited
+
+
 class TranslateSubtitlesResponse(BaseModel):
     """Raw translations for the job's current subtitle list.
 
@@ -55,3 +69,5 @@ class TranslateSubtitlesResponse(BaseModel):
     translated: int
     total: int
     subtitles: list[TranslatedTextItem]
+    #: usage AFTER this operation was recorded
+    usage: TranslationUsageOut

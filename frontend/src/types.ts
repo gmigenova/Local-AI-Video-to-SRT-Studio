@@ -151,6 +151,19 @@ export interface TranslatedTextItem {
   text: string
 }
 
+/** Cumulative Google Cloud Translation usage for the current month. */
+export interface TranslationUsage {
+  period: string
+  characters_sent: number
+  words_sent: number
+  texts_translated: number
+  requests: number
+  jobs: number
+  /** 0 = unlimited */
+  monthly_char_limit: number
+  remaining_chars: number | null
+}
+
 export interface TranslateResult {
   job_id: string
   target_language: string
@@ -160,6 +173,7 @@ export interface TranslateResult {
   translated: number
   total: number
   subtitles: TranslatedTextItem[]
+  usage: TranslationUsage
 }
 
 export type RenderStatus =

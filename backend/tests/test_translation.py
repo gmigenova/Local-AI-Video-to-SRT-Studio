@@ -78,6 +78,9 @@ def test_translate_batches_large_lists(monkeypatch: pytest.MonkeyPatch) -> None:
     assert all(text == "x" for text in result.texts)
     assert sum(batch_sizes) == 70  # nothing lost
     assert all(size <= 64 for size in batch_sizes)  # within the request limit
+    # usage metrics: characters sent + one HTTP request per batch
+    assert result.requests == len(batch_sizes)
+    assert result.characters_sent == sum(len(f"line {i}") for i in range(70))
 
 
 def test_translate_explicit_source_is_sent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -340,3 +343,88 @@ def test_translate_api_failure_maps_to_clean_detail(
     )
     assert response.status_code == 429
     assert response.json()["detail"] == "Google Cloud Translation quota exceeded."
+
+
+# ------------------------------------------------------------ usage metering
+
+
+def _fake_google(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(get_settings(), "google_translate_api_key", "test-key")
+
+    def fake_post(self: GoogleTranslateClient, body: dict, endpoint: str = _TRANSLATE_URL):
+        return {
+            "data": {
+                "translations": [
+                    {"translatedText": f"แปล:{q}", "detectedSourceLanguage": "en"}
+                    for q in body["q"]
+                ]
+            }
+        }
+
+    monkeypatch.setattr(GoogleTranslateClient, "_post", fake_post)
+
+
+def test_translate_records_usage(
+    client: TestClient, seeded_job: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_google(monkeypatch)
+    before = client.get("/api/v1/translation/usage").json()
+
+    first = client.post(
+        f"/api/v1/jobs/{seeded_job}/subtitles/translate",
+        json={"target_language": "th"},
+    )
+    assert first.status_code == 200
+    body = first.json()
+
+    # "Hello world" (11) + "How are you?" (12) = 23 chars, 5 words, 2 texts
+    assert body["usage"]["characters_sent"] == before["characters_sent"] + 23
+    assert body["usage"]["words_sent"] == before["words_sent"] + 5
+    assert body["usage"]["texts_translated"] == before["texts_translated"] + 2
+    assert body["usage"]["jobs"] == before["jobs"] + 1
+
+    # a second operation accumulates into the same monthly row
+    second = client.post(
+        f"/api/v1/jobs/{seeded_job}/subtitles/translate",
+        json={"target_language": "th"},
+    )
+    assert second.status_code == 200
+    after = client.get("/api/v1/translation/usage").json()
+    assert after["characters_sent"] == before["characters_sent"] + 46
+    assert after["requests"] >= 2  # one HTTP request per batch, accumulated
+    assert after["period"] == before["period"]
+
+
+def test_translate_blocked_when_budget_exceeded(
+    client: TestClient, seeded_job: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_google(monkeypatch)
+    monkeypatch.setattr(get_settings(), "google_translate_monthly_char_limit", 10)
+    before = client.get("/api/v1/translation/usage").json()
+
+    response = client.post(
+        f"/api/v1/jobs/{seeded_job}/subtitles/translate",
+        json={"target_language": "th"},
+    )
+
+    assert response.status_code == 429
+    assert "budget" in response.json()["detail"]
+    # nothing was metered (and nothing was sent to Google)
+    after = client.get("/api/v1/translation/usage").json()
+    assert after["characters_sent"] == before["characters_sent"]
+
+
+def test_translate_budget_zero_means_unlimited(
+    client: TestClient, seeded_job: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_google(monkeypatch)
+    monkeypatch.setattr(get_settings(), "google_translate_monthly_char_limit", 0)
+
+    response = client.post(
+        f"/api/v1/jobs/{seeded_job}/subtitles/translate",
+        json={"target_language": "th"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["usage"]["monthly_char_limit"] == 0
+    assert response.json()["usage"]["remaining_chars"] is None

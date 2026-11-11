@@ -1,17 +1,21 @@
 // Translate dialog: pick source/target language + mode, then Google Cloud
 // Translation is applied to the whole subtitle list (one undo step).
+// Shows the month's character usage so the API budget is never a surprise.
 
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, Info, Languages } from 'lucide-react'
 
 import { api } from '../../../api/client'
-import { useTranslationInfo } from '../../../api/hooks'
+import { useTranslationInfo, useTranslationUsage } from '../../../api/hooks'
 import type { TranslateMode, TranslateResult } from '../../../types'
-import { Button, Field, Modal, Spinner, inputClass } from '../../../components/ui'
+import { Button, Field, Modal, Progress, Spinner, inputClass } from '../../../components/ui'
 
 interface TranslateDialogProps {
   jobId: string
   subtitleCount: number
+  /** Total characters of non-empty subtitle text this request would send. */
+  pendingChars: number
   /** Whisper's detected language for the job, used as the default source. */
   detectedLanguage: string | null
   /** Flush pending editor edits so the server translates the latest text. */
@@ -23,12 +27,15 @@ interface TranslateDialogProps {
 export default function TranslateDialog({
   jobId,
   subtitleCount,
+  pendingChars,
   detectedLanguage,
   onBeforeTranslate,
   onApply,
   onClose,
 }: TranslateDialogProps) {
+  const queryClient = useQueryClient()
   const info = useTranslationInfo()
+  const usage = useTranslationUsage()
   const languages = useMemo(
     () => [...(info.data?.languages ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
     [info.data],
@@ -64,6 +71,7 @@ export default function TranslateDialog({
         source_language: source === 'auto' ? null : source,
         mode,
       })
+      void queryClient.invalidateQueries({ queryKey: ['translation-usage'] })
       onApply(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Translation failed')
@@ -72,6 +80,11 @@ export default function TranslateDialog({
     }
   }
 
+  const used = usage.data?.characters_sent ?? 0
+  const limit = usage.data?.monthly_char_limit ?? 0
+  // remaining is null only when unlimited (limit = 0)
+  const remaining = limit > 0 ? (usage.data?.remaining_chars ?? 0) : null
+
   return (
     <Modal open title="Translate subtitles" onClose={busy ? () => undefined : onClose}>
       <div className="space-y-4">
@@ -79,6 +92,43 @@ export default function TranslateDialog({
           <Languages size={14} className="shrink-0" />
           Google Cloud Translation · {subtitleCount} subtitle{subtitleCount === 1 ? '' : 's'}
         </p>
+
+        {configured ? (
+          <div className="rounded-lg border border-line bg-surface-2/40 px-3.5 py-2.5 text-xs">
+            {limit > 0 ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted">
+                    This month: <b className="text-text">{used.toLocaleString()}</b> /{' '}
+                    {limit.toLocaleString()} characters
+                  </span>
+                  <span
+                    className={
+                      remaining !== null && remaining < pendingChars
+                        ? 'font-medium text-danger'
+                        : 'text-muted'
+                    }
+                  >
+                    {remaining !== null ? remaining.toLocaleString() : '—'} left
+                  </span>
+                </div>
+                <Progress value={(used / limit) * 100} />
+              </>
+            ) : (
+              <p className="text-muted">
+                This month: <b className="text-text">{used.toLocaleString()}</b> characters
+                (no limit set)
+              </p>
+            )}
+            <p className="mt-1.5 text-muted/80">
+              This request sends ~{pendingChars.toLocaleString()} characters
+              {remaining !== null && remaining < pendingChars
+                ? ' — over the remaining budget, it will be rejected'
+                : ''}
+              {' '}· {(usage.data?.words_sent ?? 0).toLocaleString()} words translated so far
+            </p>
+          </div>
+        ) : null}
 
         {info.isLoading ? (
           <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted">

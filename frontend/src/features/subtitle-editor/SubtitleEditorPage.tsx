@@ -138,6 +138,10 @@ export default function SubtitleEditorPage() {
   }, [editor.dirty])
 
   const issues = useMemo(() => checkSubtitles(editor.subs), [editor.subs])
+  const pendingChars = useMemo(
+    () => editor.subs.reduce((n, s) => n + s.text.trim().length, 0),
+    [editor.subs],
+  )
   const totalIssues = useMemo(
     () => Array.from(issues.values()).reduce((n, list) => n + list.length, 0),
     [issues],
@@ -459,6 +463,7 @@ export default function SubtitleEditorPage() {
         <TranslateDialog
           jobId={jobId!}
           subtitleCount={editor.subs.length}
+          pendingChars={pendingChars}
           detectedLanguage={job.data.detected_language ?? job.data.language}
           onBeforeTranslate={editor.save}
           onApply={(result) => {
@@ -467,8 +472,14 @@ export default function SubtitleEditorPage() {
               result.source_language ?? result.detected_source_language,
             )
             const to = languageName(result.target_language)
+            const usage = result.usage
+            const budget =
+              usage.monthly_char_limit > 0
+                ? ` · ${usage.characters_sent.toLocaleString()} / ${usage.monthly_char_limit.toLocaleString()} chars this month`
+                : ` · ${usage.characters_sent.toLocaleString()} chars this month`
             setNotice(
               `Translated ${result.translated} of ${result.total} subtitles (${from} → ${to})` +
+                budget +
                 (changed === 0 ? ' — no visible changes.' : '. Undo with Ctrl+Z.'),
             )
             setShowTranslate(false)

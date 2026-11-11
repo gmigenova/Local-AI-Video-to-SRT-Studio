@@ -95,6 +95,15 @@ hardcode absolute user paths (§20.11).
   applies results client-side (`applyTranslation` — one undo step;
   `replace` or `dual` bilingual) and lets auto-save persist them; the
   sync endpoint remains the only persistence path.
+  **Usage metering**: table `translation_usage` (migration `d7c2f8a4b1e6`)
+  accumulates per local month (`YYYY-MM`) the characters sent (Google's
+  billing/quota unit), words (display only), texts, HTTP requests and
+  operations. `GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT` (default 500000, 0 =
+  unlimited) is enforced *before* calling Google — a request that would
+  exceed the month's budget is rejected with a clean 429 and meters nothing.
+  APIs: `GET /translation/usage`; translate responses include the updated
+  `usage` block, which the Translate dialog (budget bar + per-request
+  estimate) and the editor notice display.
 
 ## Architecture invariants (do not break)
 

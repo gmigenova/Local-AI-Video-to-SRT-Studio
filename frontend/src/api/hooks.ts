@@ -134,6 +134,15 @@ export function useTranslationInfo() {
   })
 }
 
+/** Characters translated this month vs. the configured budget (refetch on mount). */
+export function useTranslationUsage() {
+  return useQuery({
+    queryKey: ['translation-usage'],
+    queryFn: api.translationUsage,
+    staleTime: 0,
+  })
+}
+
 /** Latest burn-in render: null until one exists; polls while active. */
 export function useRender(jobId: string | undefined) {
   return useQuery({

@@ -15,6 +15,7 @@ import type {
   TranslateRequest,
   TranslateResult,
   TranslationInfo,
+  TranslationUsage,
   UploadResult,
   VideoRender,
 } from '../types'
@@ -145,6 +146,7 @@ export const api = {
 
   // Google Cloud Translation (subtitle translation)
   translationInfo: () => request<TranslationInfo>('/translation/languages'),
+  translationUsage: () => request<TranslationUsage>('/translation/usage'),
   translateSubtitles: (jobId: string, payload: TranslateRequest) =>
     request<TranslateResult>(`/jobs/${jobId}/subtitles/translate`, {
       method: 'POST',

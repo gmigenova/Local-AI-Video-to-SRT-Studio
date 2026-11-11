@@ -78,10 +78,14 @@ class TranslationServiceError(Exception):
 
 @dataclass
 class TranslationResult:
-    """Translated texts aligned 1:1 with the input list + detected source."""
+    """Translated texts aligned 1:1 with the input list + usage metrics."""
 
     texts: list[str]
     detected_source_language: str | None = None
+    #: characters actually sent to the API (Google's billing/quota unit)
+    characters_sent: int = 0
+    #: number of HTTP requests made (one per batch)
+    requests: int = 0
 
 
 def _is_valid_language_code(code: str) -> bool:
@@ -123,7 +127,8 @@ class GoogleTranslateClient:
 
         results = [""] * len(texts)
         detected: str | None = None
-        translated_count = 0
+        characters_sent = 0
+        request_count = 0
 
         for positions, batch in self._batches(texts):
             payload = self._post(
@@ -134,6 +139,8 @@ class GoogleTranslateClient:
                     **({"source": source_language} if source_language else {}),
                 }
             )
+            request_count += 1
+            characters_sent += sum(len(text) for text in batch)
             translations = payload.get("data", {}).get("translations", [])
             if len(translations) != len(batch):
                 raise TranslationServiceError(
@@ -142,12 +149,16 @@ class GoogleTranslateClient:
             for slot, entry in zip(positions, translations, strict=True):
                 text = html.unescape(str(entry.get("translatedText", "")))
                 results[slot] = text.strip()
-                translated_count += 1
             if detected is None:
                 first = translations[0].get("detectedSourceLanguage")
                 detected = str(first) if first else None
 
-        return TranslationResult(texts=results, detected_source_language=detected)
+        return TranslationResult(
+            texts=results,
+            detected_source_language=detected,
+            characters_sent=characters_sent,
+            requests=request_count,
+        )
 
     def list_supported_languages(self, display_language: str = "en") -> list[dict[str, str]]:
         """Languages Google reports as supported: ``[{code, name}]``."""

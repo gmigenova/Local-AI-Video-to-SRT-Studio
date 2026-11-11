@@ -19,6 +19,7 @@ from app.models.project import Project
 from app.models.render import ACTIVE_RENDER_STATUSES, RenderStatus, VideoRender
 from app.models.segment import TranscriptionSegment
 from app.models.subtitle import SubtitleModel
+from app.models.translation_usage import TranslationUsage
 
 __all__ = [
     "ACTIVE_JOB_STATUSES",
@@ -32,5 +33,6 @@ __all__ = [
     "TranscriptionJob",
     "TranscriptionSegment",
     "TranscriptionSettings",
+    "TranslationUsage",
     "VideoRender",
 ]
