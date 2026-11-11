@@ -211,7 +211,10 @@ export interface TranscriptionSettings {
   vad_filter?: boolean
   word_timestamps?: boolean
   condition_on_previous_text?: boolean
+  hallucination_silence_threshold?: number
   initial_prompt?: string | null
+  vad_threshold?: number
+  vad_min_silence_ms?: number
   min_duration?: number
   max_duration?: number
   max_chars_per_line?: number

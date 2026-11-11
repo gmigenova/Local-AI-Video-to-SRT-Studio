@@ -55,6 +55,8 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe_parser.add_argument("--initial-prompt", default=None)
     transcribe_parser.add_argument("--no-vad", action="store_true", help="Disable VAD filter")
     transcribe_parser.add_argument("--no-word-timestamps", action="store_true")
+    transcribe_parser.add_argument("--condition-on-previous-text", action="store_true",
+                                   help="Feed previous text back as context (drifts on long/silent audio)")
     transcribe_parser.add_argument("--formats", default="srt",
                                    help=f"Comma-separated export formats: {','.join(supported_formats())}")
     transcribe_parser.add_argument("--min-duration", type=float, default=None,
@@ -112,6 +114,7 @@ def cmd_transcribe(args: argparse.Namespace, settings: Settings) -> int:
         beam_size=args.beam_size if args.beam_size is not None else 5,
         vad_filter=not args.no_vad,
         word_timestamps=not args.no_word_timestamps,
+        condition_on_previous_text=args.condition_on_previous_text,
         initial_prompt=args.initial_prompt,
     )
     if args.device or args.compute_type:

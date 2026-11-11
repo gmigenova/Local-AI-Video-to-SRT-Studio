@@ -110,7 +110,15 @@ class TranscriptionOptions:
     temperature: float = 0.0
     vad_filter: bool = True
     word_timestamps: bool = True
-    condition_on_previous_text: bool = True
+    # Anti-drift defaults for long videos: feeding the previous window's text
+    # back as context makes one bad decode (typically right after a long
+    # silent stretch) poison every following window.  Disabled by default;
+    # ``condition_on_previous_text=True`` is only worth it on short, clean
+    # audio.  ``hallucination_silence_threshold`` (needs word_timestamps)
+    # tells faster-whisper to skip silent periods when a hallucination is
+    # suspected instead of decoding noise into text.
+    condition_on_previous_text: bool = False
+    hallucination_silence_threshold: float | None = 2.0
     initial_prompt: str | None = None
     # Optional Silero VAD tuning (section 19 "Optimize VAD"); None = engine default
     vad_threshold: float | None = None
@@ -131,6 +139,7 @@ class TranscriptionOptions:
             "vad_filter": self.vad_filter,
             "word_timestamps": self.word_timestamps,
             "condition_on_previous_text": self.condition_on_previous_text,
+            "hallucination_silence_threshold": self.hallucination_silence_threshold,
             "initial_prompt": self.initial_prompt,
         }
 

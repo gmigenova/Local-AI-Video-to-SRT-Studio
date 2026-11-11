@@ -61,7 +61,10 @@ _OPTION_KEYS = {
     "vad_filter",
     "word_timestamps",
     "condition_on_previous_text",
+    "hallucination_silence_threshold",
     "initial_prompt",
+    "vad_threshold",
+    "vad_min_silence_ms",
 }
 _RULE_KEYS = set(SubtitleRules.model_fields)
 

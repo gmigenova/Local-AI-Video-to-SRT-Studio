@@ -142,7 +142,49 @@ export default function TranscriptionSettingsForm({
               />
               Word-level timestamps
             </label>
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                checked={store.conditionOnPrevText}
+                onChange={(e) => store.patch({ conditionOnPrevText: e.target.checked })}
+              />
+              <span>
+                Carry context between segments
+                <span className="block text-[11px] text-muted">
+                  Can make subtitles drift after long silences — leave off for long
+                  videos
+                </span>
+              </span>
+            </label>
           </div>
+          {store.vad ? (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="VAD threshold" hint="0.5 = default; higher filters more quiet noise">
+                <input
+                  type="number"
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  className={inputClass}
+                  placeholder="0.5"
+                  value={store.vadThreshold}
+                  onChange={(e) => store.patch({ vadThreshold: e.target.value })}
+                />
+              </Field>
+              <Field label="Min silence (ms)" hint="2000 = default; split at longer quiet gaps">
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  className={inputClass}
+                  placeholder="2000"
+                  value={store.vadMinSilenceMs}
+                  onChange={(e) => store.patch({ vadMinSilenceMs: e.target.value })}
+                />
+              </Field>
+            </div>
+          ) : null}
           <Field label="Initial prompt" hint="Optional vocabulary hint for the model">
             <input
               type="text"

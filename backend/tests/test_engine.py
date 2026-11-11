@@ -50,6 +50,44 @@ class TestParameterFiltering:
         assert kwargs["vad_filter"] is False
 
 
+class TestAntiDriftDefaults:
+    """Long-video defaults: no context carry-over, hallucination guard on."""
+
+    def test_long_audio_safe_defaults(self):
+        options = TranscriptionOptions()
+        assert options.condition_on_previous_text is False
+        assert options.hallucination_silence_threshold == 2.0
+
+    def test_anti_drift_kwargs_forwarded(self):
+        engine = FasterWhisperEngine("tiny")
+
+        class _ModernFakeModel:
+            # Named parameters so inspect.signature mirrors a modern
+            # faster-whisper build (**kwargs would hide them).
+            def transcribe(
+                self,
+                audio,
+                language=None,
+                task="transcribe",
+                beam_size=5,
+                vad_filter=False,
+                word_timestamps=True,
+                condition_on_previous_text=True,
+                hallucination_silence_threshold=None,
+                initial_prompt=None,
+            ):
+                raise AssertionError("not called in this test")
+
+        engine._model = _ModernFakeModel()
+        kwargs = engine._supported_transcribe_kwargs(TranscriptionOptions())
+        assert kwargs["condition_on_previous_text"] is False
+        assert kwargs["hallucination_silence_threshold"] == 2.0
+
+    def test_context_can_be_re_enabled(self):
+        options = TranscriptionOptions(condition_on_previous_text=True)
+        assert options.to_engine_kwargs()["condition_on_previous_text"] is True
+
+
 class TestResolveInferenceTarget:
     def test_cpu_auto(self):
         device, compute, note = resolve_inference_target("cpu", "auto")

@@ -130,6 +130,20 @@ hardcode absolute user paths (§20.11).
   before removing anything; `remove_media_artifacts` does the rmtree pass).
   UI: per-row trash button on the project detail page opens
   `DeleteMediaDialog`; `useDeleteMedia` invalidates the media list + jobs.
+- **Post-spec: anti-drift transcription defaults** — long videos with long
+  silent stretches used to transcribe fine at first, then go completely
+  wrong after the silence (classic Whisper failure: one bad decode gets
+  fed back as context and poisons every following window). Fixes:
+  `TranscriptionOptions.condition_on_previous_text` now defaults to
+  **False**, and a new `hallucination_silence_threshold` (default 2.0 s,
+  needs word timestamps) tells faster-whisper to skip silent periods when
+  a hallucination is suspected. Both flow through `settings_json`
+  (`_OPTION_KEYS`) so the API/UI/CLI can override; the UI's Advanced
+  panel gained a "Carry context between segments" toggle (off by
+  default) plus optional VAD threshold / min-silence inputs (empty =
+  engine default), and the CLI gained `--condition-on-previous-text`.
+  The VAD keys were also added to `_OPTION_KEYS`, so Phase-5 VAD tuning
+  is now reachable from the API/UI, not just the engine layer.
 - **Post-spec: visual polish** (`index.css` + `ui.tsx`) — theme-aware
   elevation tokens (`--shadow-1/2` → utilities `shadow-card`/`shadow-raised`;
   dark mode adds an inset top highlight), a barely-there fixed accent radial
