@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     # Uploads
     max_upload_size_gb: float = 20.0
 
+    # Google Cloud Translation API (subtitle translation; empty key = disabled)
+    google_translate_api_key: str = ""
+    google_translate_timeout_seconds: float = 30.0
+
     # Retention / automatic cleanup (days; 0 disables the rule)
     retention_temp_days: int = 7
     retention_audio_days: int = 14

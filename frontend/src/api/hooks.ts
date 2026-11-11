@@ -125,6 +125,15 @@ export function useSubtitles(jobId: string | undefined, enabled = true) {
   })
 }
 
+/** Language catalog + whether the Google Cloud Translation key is set. */
+export function useTranslationInfo() {
+  return useQuery({
+    queryKey: ['translation-info'],
+    queryFn: api.translationInfo,
+    staleTime: 5 * 60_000,
+  })
+}
+
 /** Latest burn-in render: null until one exists; polls while active. */
 export function useRender(jobId: string | undefined) {
   return useQuery({

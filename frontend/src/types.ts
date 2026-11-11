@@ -126,6 +126,42 @@ export interface SyncSubtitleItem {
   is_edited: boolean
 }
 
+// ---- Google Cloud Translation (subtitle translation) ----
+
+export interface TranslateLanguage {
+  code: string
+  name: string
+}
+
+export interface TranslationInfo {
+  configured: boolean
+  languages: TranslateLanguage[]
+}
+
+export type TranslateMode = 'replace' | 'dual'
+
+export interface TranslateRequest {
+  target_language: string
+  source_language: string | null
+  mode: TranslateMode
+}
+
+export interface TranslatedTextItem {
+  index: number
+  text: string
+}
+
+export interface TranslateResult {
+  job_id: string
+  target_language: string
+  source_language: string | null
+  detected_source_language: string | null
+  mode: TranslateMode
+  translated: number
+  total: number
+  subtitles: TranslatedTextItem[]
+}
+
 export type RenderStatus =
   | 'queued'
   | 'running'

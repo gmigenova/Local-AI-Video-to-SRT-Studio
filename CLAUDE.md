@@ -81,6 +81,20 @@ hardcode absolute user paths (§20.11).
   involved. The filter references the SRT by bare name with `cwd` set to
   the render dir (no Windows drive-colon escaping). Renders are NOT
   covered by retention cleanup.
+- **Post-spec: subtitle translation** — Google Cloud Translation API (v2,
+  API-key auth via `GOOGLE_TRANSLATE_API_KEY` in `.env`; feature disabled
+  when empty). `app/services/translation/google_translate.py` is a stdlib
+  REST client (no new deps): batches ≤64 texts/4000 chars per request,
+  skips empty cues, maps API/network failures to clean messages
+  (`TranslationServiceError`, HTTP status preserved). APIs:
+  `GET /translation/languages` (live supported list when configured,
+  curated `FALLBACK_LANGUAGES` otherwise) and
+  `POST /jobs/{id}/subtitles/translate` (target/source/mode) which
+  translates the job's *saved* rows and returns raw texts aligned by
+  index. The editor's Translate dialog flushes auto-save first, then
+  applies results client-side (`applyTranslation` — one undo step;
+  `replace` or `dual` bilingual) and lets auto-save persist them; the
+  sync endpoint remains the only persistence path.
 
 ## Architecture invariants (do not break)
 

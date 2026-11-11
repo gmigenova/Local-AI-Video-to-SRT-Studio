@@ -46,3 +46,7 @@ class OperationCancelled(VideoToSrtError):
 
 class ExportError(VideoToSrtError):
     """Subtitle export failed."""
+
+
+class TranslationError(VideoToSrtError):
+    """Subtitle translation failed (bad config, API error, network)."""

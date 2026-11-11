@@ -12,6 +12,9 @@ import type {
   Subtitle,
   SyncSubtitleItem,
   SystemInfo,
+  TranslateRequest,
+  TranslateResult,
+  TranslationInfo,
   UploadResult,
   VideoRender,
 } from '../types'
@@ -139,6 +142,14 @@ export const api = {
       { method: 'POST', body: form },
     )
   },
+
+  // Google Cloud Translation (subtitle translation)
+  translationInfo: () => request<TranslationInfo>('/translation/languages'),
+  translateSubtitles: (jobId: string, payload: TranslateRequest) =>
+    request<TranslateResult>(`/jobs/${jobId}/subtitles/translate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   // video render (subtitle burn-in)
   startRender: (jobId: string, fontName?: string, srtFile?: File | null) => {

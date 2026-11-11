@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { api } from '../../api/client'
-import type { Subtitle, SyncSubtitleItem } from '../../types'
+import type { Subtitle, SyncSubtitleItem, TranslateMode, TranslatedTextItem } from '../../types'
 import { clamp } from './time'
 
 export interface EditorSubtitle {
@@ -251,6 +251,31 @@ export function useSubtitleEditor(jobId: string | undefined) {
     [commit],
   )
 
+  /** Apply translation results (1-based indexes aligned to the saved list).
+   *
+   * 'replace' swaps the cue text for the translation; 'dual' appends the
+   * translation on a new line below the original (bilingual subtitles).
+   * Applied as ONE undo step; auto-save persists it like any other edit.
+   */
+  const applyTranslation = useCallback(
+    (items: TranslatedTextItem[], mode: TranslateMode): number => {
+      let changed = 0
+      const byIndex = new Map(items.map((item) => [item.index, item.text]))
+      const next = subsRef.current.map((s, i) => {
+        const translated = byIndex.get(i + 1)
+        if (translated === undefined || !translated) return s
+        const text =
+          mode === 'dual' && s.text.trim() ? `${s.text.trimEnd()}\n${translated}` : translated
+        if (text === s.text) return s
+        changed += 1
+        return { ...s, text, is_edited: true }
+      })
+      if (changed > 0) commit(next)
+      return changed
+    },
+    [commit],
+  )
+
   // ------------------------------------------------------------ persistence
   const save = useCallback(async (): Promise<boolean> => {
     if (!jobId || !loaded) return false
@@ -307,5 +332,6 @@ export function useSubtitleEditor(jobId: string | undefined) {
     splitAtPlayhead,
     mergeWithNext,
     replaceAllText,
+    applyTranslation,
   }
 }

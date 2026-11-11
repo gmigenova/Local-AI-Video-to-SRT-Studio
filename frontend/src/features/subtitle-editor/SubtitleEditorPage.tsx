@@ -11,10 +11,12 @@ import {
   ArrowLeft,
   Braces,
   Captions,
+  CheckCircle2,
   Download,
   FileText,
   FileUp,
   Film,
+  Languages,
   Plus,
   Redo2,
   RefreshCw,
@@ -42,6 +44,7 @@ import EditorVideoPlayer from './components/EditorVideoPlayer'
 import Timeline from './components/Timeline'
 import SubtitleRow from './components/SubtitleRow'
 import SearchReplace from './components/SearchReplace'
+import TranslateDialog from './components/TranslateDialog'
 import { checkSubtitles, ISSUE_LABELS } from './quality'
 import { useSubtitleEditor } from './useSubtitleEditor'
 import { languageName } from '../../utils/format'
@@ -63,6 +66,8 @@ export default function SubtitleEditorPage() {
   const [search, setSearch] = useState('')
   const [showWarnings, setShowWarnings] = useState(false)
   const [showRender, setShowRender] = useState(false)
+  const [showTranslate, setShowTranslate] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [reprocessing, setReprocessing] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -359,6 +364,17 @@ export default function SubtitleEditorPage() {
           />
           <Button
             variant="secondary"
+            title="Translate all subtitles with Google Cloud Translation"
+            onClick={() => {
+              setNotice(null)
+              setShowTranslate(true)
+            }}
+            disabled={editor.subs.length === 0}
+          >
+            <Languages size={15} /> Translate
+          </Button>
+          <Button
+            variant="secondary"
             title="Import an external .srt file — preview & edit it like transcribed subtitles"
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
@@ -420,6 +436,45 @@ export default function SubtitleEditorPage() {
             <X size={14} />
           </button>
         </div>
+      ) : null}
+
+      {notice ? (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 rounded-lg border border-success/30 bg-success/5 px-3.5 py-2.5 text-sm text-success"
+        >
+          <CheckCircle2 size={15} className="mt-0.5 shrink-0" />
+          <span className="min-w-0 flex-1 break-words">{notice}</span>
+          <button
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            className="rounded-md p-1 transition-colors hover:bg-success/10"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ) : null}
+
+      {showTranslate ? (
+        <TranslateDialog
+          jobId={jobId!}
+          subtitleCount={editor.subs.length}
+          detectedLanguage={job.data.detected_language ?? job.data.language}
+          onBeforeTranslate={editor.save}
+          onApply={(result) => {
+            const changed = editor.applyTranslation(result.subtitles, result.mode)
+            const from = languageName(
+              result.source_language ?? result.detected_source_language,
+            )
+            const to = languageName(result.target_language)
+            setNotice(
+              `Translated ${result.translated} of ${result.total} subtitles (${from} → ${to})` +
+                (changed === 0 ? ' — no visible changes.' : '. Undo with Ctrl+Z.'),
+            )
+            setShowTranslate(false)
+          }}
+          onClose={() => setShowTranslate(false)}
+        />
       ) : null}
 
       {showRender ? (
