@@ -50,17 +50,30 @@ export default function SubtitleEditorPage() {
   const [showWarnings, setShowWarnings] = useState(false)
   const [showRender, setShowRender] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [importError, setImportError] = useState<string | null>(null)
+  const [reprocessing, setReprocessing] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
   const loadedToken = useRef(-1)
   const importInputRef = useRef<HTMLInputElement>(null)
 
+  // Reprocess/import replace the server-side rows, then we reload. The
+  // fresh list MUST land in the query cache BEFORE the reload token is
+  // bumped: the working-copy effect keys off the token, so bumping it
+  // while the cache still holds the previous data makes it accept the
+  // stale rows — and the refetch that arrives later is then ignored.
+  const reloadSubtitles = useCallback(async () => {
+    if (!jobId) return
+    const fresh = await api.listSubtitles(jobId)
+    queryClient.setQueryData(['subtitles', jobId], fresh)
+    setReloadToken((t) => t + 1)
+  }, [jobId, queryClient])
+
   const handleImportFile = useCallback(
     async (file: File) => {
       if (!jobId) return
-      setImportError(null)
+      setActionError(null)
       if (!file.name.toLowerCase().endsWith('.srt')) {
-        setImportError('Expected a .srt file.')
+        setActionError('Expected a .srt file.')
         return
       }
       if (
@@ -72,16 +85,18 @@ export default function SubtitleEditorPage() {
       }
       setImporting(true)
       try {
+        // flush pending edits first so a debounced auto-save cannot
+        // overwrite the imported rows afterwards
+        await editor.save()
         await api.importSubtitles(jobId, file)
-        setReloadToken((t) => t + 1)
-        void queryClient.invalidateQueries({ queryKey: ['subtitles', jobId] })
+        await reloadSubtitles()
       } catch (error) {
-        setImportError(error instanceof Error ? error.message : 'Import failed')
+        setActionError(error instanceof Error ? error.message : 'Import failed')
       } finally {
         setImporting(false)
       }
     },
-    [jobId, queryClient],
+    [jobId, editor, reloadSubtitles],
   )
 
   // initialize the working copy once (and after each reprocess)
@@ -278,6 +293,7 @@ export default function SubtitleEditorPage() {
           <Button
             variant="secondary"
             title="Regenerate from the AI transcript (discards manual edits)"
+            disabled={reprocessing}
             onClick={async () => {
               if (
                 !window.confirm(
@@ -286,12 +302,29 @@ export default function SubtitleEditorPage() {
               ) {
                 return
               }
-              await api.reprocessSubtitles(jobId!)
-              setReloadToken((t) => t + 1)
-              void queryClient.invalidateQueries({ queryKey: ['subtitles', jobId] })
+              setReprocessing(true)
+              setActionError(null)
+              try {
+                // flush pending edits first so a debounced auto-save cannot
+                // overwrite the reprocessed rows afterwards
+                await editor.save()
+                await api.reprocessSubtitles(jobId!)
+                await reloadSubtitles()
+              } catch (error) {
+                setActionError(
+                  error instanceof Error ? error.message : 'Reprocess failed',
+                )
+              } finally {
+                setReprocessing(false)
+              }
             }}
           >
-            <RefreshCw size={15} /> Reprocess
+            {reprocessing ? (
+              <Spinner className="h-3.5 w-3.5" />
+            ) : (
+              <RefreshCw size={15} />
+            )}{' '}
+            Reprocess
           </Button>
           <input
             ref={importInputRef}
@@ -313,8 +346,8 @@ export default function SubtitleEditorPage() {
             {importing ? <Spinner className="h-3.5 w-3.5" /> : <FileUp size={15} />}{' '}
             Import SRT
           </Button>
-          {importError ? (
-            <span className="text-xs text-danger">{importError}</span>
+          {actionError ? (
+            <span className="text-xs text-danger">{actionError}</span>
           ) : null}
           <a href={exportUrl(jobId!, 'srt')} download>
             <Button>
