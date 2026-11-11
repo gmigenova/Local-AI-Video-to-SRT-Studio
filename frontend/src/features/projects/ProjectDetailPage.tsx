@@ -17,6 +17,7 @@ import TranscriptionSettingsForm from '../../components/TranscriptionSettingsFor
 import { useSettingsStore } from '../../stores/settings'
 import { formatBytes, formatDuration, languageName } from '../../utils/format'
 import type { MediaFile } from '../../types'
+import DeleteMediaDialog from './components/DeleteMediaDialog'
 import DeleteProjectDialog from './components/DeleteProjectDialog'
 import EditProjectDialog from './components/EditProjectDialog'
 
@@ -30,6 +31,7 @@ export default function ProjectDetailPage() {
   const [settingsFor, setSettingsFor] = useState<MediaFile | null>(null)
   const [showDelete, setShowDelete] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
+  const [deletingMedia, setDeletingMedia] = useState<MediaFile | null>(null)
 
   const mediaIds = useMemo(() => new Set((media.data ?? []).map((m) => m.id)), [media.data])
   const projectJobs = useMemo(
@@ -163,6 +165,15 @@ export default function ProjectDetailPage() {
                     >
                       <Sparkles size={15} /> Transcribe
                     </Button>
+                    <Button
+                      variant="danger"
+                      className="px-2.5"
+                      title="Delete this video and its results"
+                      aria-label={`Delete ${file.original_name}`}
+                      onClick={() => setDeletingMedia(file)}
+                    >
+                      <Trash2 size={15} />
+                    </Button>
                   </div>
                 </li>
               )
@@ -223,6 +234,10 @@ export default function ProjectDetailPage() {
 
       {showEdit && project.data ? (
         <EditProjectDialog project={project.data} onClose={() => setShowEdit(false)} />
+      ) : null}
+
+      {deletingMedia ? (
+        <DeleteMediaDialog media={deletingMedia} onClose={() => setDeletingMedia(null)} />
       ) : null}
     </div>
   )

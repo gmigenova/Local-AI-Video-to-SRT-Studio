@@ -2,28 +2,21 @@
 
 from __future__ import annotations
 
-import shutil
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.database.base import get_db
-from app.models.job import JobStatus
 from app.models.project import Project
 from app.repositories.projects import ProjectsRepository
 from app.repositories.renders import RendersRepository
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
+from app.services.media.deletion import (
+    MediaDeletionRejected,
+    assert_media_idle,
+    remove_media_artifacts,
+)
 
 router = APIRouter()
-
-#: statuses that mean the AI worker is on (or about to pick up) a job of
-#: this project - deleting underneath it would fail mid-write.
-_BUSY_JOB_STATUSES = {s.value for s in JobStatus} - {
-    JobStatus.COMPLETED.value,
-    JobStatus.FAILED.value,
-    JobStatus.CANCELLED.value,
-}
 
 
 def _get_project_or_404(db: Session, project_id: str) -> Project:
@@ -76,33 +69,13 @@ def delete_project(project_id: str, db: Session = Depends(get_db)) -> None:
     transcripts, subtitle exports and hardsub render outputs.
     """
     project = _get_project_or_404(db, project_id)
-    settings = get_settings()
     renders_repo = RendersRepository(db)
 
-    jobs = [job for media in project.media_files for job in media.jobs]
+    # guards first across ALL media so nothing is half-deleted (§7.7)
+    try:
+        assert_media_idle(list(project.media_files), renders_repo, subject="project")
+    except MediaDeletionRejected as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
-    # ---- guards: never delete underneath running work --------------------
-    busy = next((job for job in jobs if job.status in _BUSY_JOB_STATUSES), None)
-    if busy is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "This project has a transcription job that is queued or running. "
-                "Wait for it to finish or cancel it first."
-            ),
-        )
-    if renders_repo.active_for_jobs([job.id for job in jobs]):
-        raise HTTPException(
-            status_code=409,
-            detail="A burn-in render is running for this project. Cancel it first.",
-        )
-
-    # ---- on-disk cleanup --------------------------------------------------
-    for media in project.media_files:
-        shutil.rmtree(settings.storage_subdir("uploads") / media.id, ignore_errors=True)
-        for job in media.jobs:
-            for sub in ("audio", "transcripts", "subtitles"):
-                shutil.rmtree(settings.storage_subdir(sub) / job.id, ignore_errors=True)
-            for render in renders_repo.list_for_job(job.id):
-                shutil.rmtree(settings.storage_subdir("renders") / render.id, ignore_errors=True)
+    remove_media_artifacts(list(project.media_files), renders_repo)
     ProjectsRepository(db).delete(project)

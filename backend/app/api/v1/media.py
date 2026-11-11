@@ -15,6 +15,7 @@ from app.database.base import get_db
 from app.models.media_file import MediaFile
 from app.repositories.media import MediaRepository
 from app.schemas.media import AudioStreamOut, MediaOut, MediaUpdate, UploadResult
+from app.services.media.deletion import MediaDeletionRejected, delete_media_file
 from app.services.media.ffprobe import probe_video
 from app.services.media.upload_service import UploadService
 
@@ -99,6 +100,21 @@ def media_streams(media_id: str, db: Session = Depends(get_db)) -> list[AudioStr
         )
         for s in info.audio_streams
     ]
+
+
+@router.delete("/media/{media_id}", status_code=204)
+def delete_media(media_id: str, db: Session = Depends(get_db)) -> None:
+    """Delete one video with everything derived from it.
+
+    Removes the upload file, all its transcription jobs (audio, transcripts,
+    subtitle exports) and hardsub render outputs.  Rejected (409) while a
+    job or render is still active for this video.
+    """
+    media = _get_media_or_404(db, media_id)
+    try:
+        delete_media_file(db, media)
+    except MediaDeletionRejected as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @router.patch("/media/{media_id}", response_model=MediaOut)

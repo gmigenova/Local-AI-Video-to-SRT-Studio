@@ -122,6 +122,14 @@ hardcode absolute user paths (§20.11).
   project title on the detail page opens `EditProjectDialog`
   (name + description); `useUpdateProject` updates the `['project', id]`
   cache and invalidates the list.
+- **Post-spec: per-video delete** — `DELETE /media/{id}` removes one video
+  with everything derived from it (upload dir, per-job audio/transcripts/
+  subtitles, render dirs; DB rows cascade). Guards + cleanup live in
+  `app/services/media/deletion.py` and are shared with project delete
+  (`assert_media_idle` 409s while a job/render is active — check ALL media
+  before removing anything; `remove_media_artifacts` does the rmtree pass).
+  UI: per-row trash button on the project detail page opens
+  `DeleteMediaDialog`; `useDeleteMedia` invalidates the media list + jobs.
 
 ## Architecture invariants (do not break)
 

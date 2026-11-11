@@ -97,6 +97,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ stream_index: streamIndex }),
     }),
+  deleteMedia: (id: string) =>
+    request<void>(`/media/${id}`, { method: 'DELETE' }),
 
   // jobs
   createJob: (payload: CreateJobRequest) =>

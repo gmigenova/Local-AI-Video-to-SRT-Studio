@@ -105,6 +105,20 @@ export function useSelectAudioStream() {
   })
 }
 
+export function useDeleteMedia() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ mediaId }: { mediaId: string; projectId: string }) =>
+      api.deleteMedia(mediaId),
+    onSuccess: (_data, { mediaId, projectId }) => {
+      client.removeQueries({ queryKey: ['media-item', mediaId] })
+      client.invalidateQueries({ queryKey: ['media', projectId] })
+      // jobs of the deleted media are gone too
+      client.invalidateQueries({ queryKey: ['jobs'] })
+    },
+  })
+}
+
 /** Job polling: fast while active (§11.4), stops on terminal states. */
 export function useJob(jobId: string | undefined) {
   return useQuery({

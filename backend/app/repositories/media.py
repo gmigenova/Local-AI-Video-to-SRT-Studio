@@ -29,3 +29,7 @@ class MediaRepository:
             .order_by(MediaFile.created_at.desc())
         )
         return list(self.db.scalars(stmt))
+
+    def delete(self, media: MediaFile) -> None:
+        self.db.delete(media)
+        self.db.commit()

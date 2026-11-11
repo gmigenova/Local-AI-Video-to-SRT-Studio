@@ -202,6 +202,62 @@ class TestProjectDelete:
         assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
 
 
+class TestMediaDelete:
+    """DELETE /media/{id}: single-video delete with artifact cleanup."""
+
+    def _force_status(self, job_id: str, status: JobStatus) -> None:
+        db = get_session_factory()()
+        try:
+            JobsRepository(db).update_status(job_id, status)
+        finally:
+            db.close()
+
+    def test_delete_unknown_media_is_404(self, client: TestClient):
+        assert client.delete("/api/v1/media/not-a-uuid").status_code == 404
+
+    def test_delete_media_removes_files_and_rows(
+        self,
+        client: TestClient,
+        project_id: str,
+        media_id: str,
+        worker: JobWorker,
+    ):
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny", "language": None}
+        ).json()["job_id"]
+        assert worker.process_once() == job_id  # completed -> artifacts on disk
+
+        settings = get_settings()
+        upload_dir = settings.storage_subdir("uploads") / media_id
+        subtitle_dir = settings.storage_subdir("subtitles") / job_id
+        assert upload_dir.is_dir() and subtitle_dir.is_dir()
+
+        assert client.delete(f"/api/v1/media/{media_id}").status_code == 204
+
+        assert not upload_dir.exists()
+        assert not subtitle_dir.exists()
+        assert client.get(f"/api/v1/media/{media_id}").status_code == 404
+        assert client.get(f"/api/v1/media?project_id={project_id}").json() == []
+        # the project itself survives
+        assert client.get(f"/api/v1/projects/{project_id}").status_code == 200
+
+    def test_delete_media_blocked_while_job_active(
+        self, client: TestClient, project_id: str, media_id: str
+    ):
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny", "language": None}
+        ).json()["job_id"]
+
+        blocked = client.delete(f"/api/v1/media/{media_id}")
+        assert blocked.status_code == 409
+        assert "cancel" in blocked.json()["detail"].lower()
+        # nothing was deleted
+        assert client.get(f"/api/v1/media/{media_id}").status_code == 200
+
+        self._force_status(job_id, JobStatus.FAILED)
+        assert client.delete(f"/api/v1/media/{media_id}").status_code == 204
+
+
 class TestUploadValidation:
     def test_reject_unsupported_extension(self, client: TestClient, project_id: str):
         response = client.post(
