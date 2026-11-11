@@ -20,6 +20,7 @@ from app.database.base import init_database
 from app.database.migrations import run_migrations
 from app.services.export import ExportJobError
 from app.services.media.upload_service import UploadRejected
+from app.services.render import get_render_manager
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,13 @@ async def lifespan(app: FastAPI):
         run_migrations()
     except Exception as exc:  # noqa: BLE001 - API still boots read-only-ish
         logger.error("Migration failed at startup: %s", exc)
-    yield
+    # burn-in render loop (also requeues renders interrupted by a restart)
+    render_manager = get_render_manager()
+    render_manager.start()
+    try:
+        yield
+    finally:
+        render_manager.stop()
 
 
 def _status_error_handler(status_code_attr: str = "status_code", message_attr: str = "message"):

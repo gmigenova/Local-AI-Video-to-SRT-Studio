@@ -57,6 +57,15 @@ hardcode absolute user paths (§20.11).
   never deleted); Docker files (`docker-compose.yml`, backend/frontend
   Dockerfiles, `requirements-gpu.txt`) — UNTESTED on the build machine.
   Logs/heartbeat paths are configurable via `LOGS_PATH` (container-safe).
+- **Post-spec: burn-in video export** — hardsub renders via
+  `app/services/render/` (`SubtitleBurner` + `RenderManager`), table
+  `video_renders` (migration `a1c4f7e2b9d8`), APIs
+  `POST /jobs/{id}/render`, `GET /jobs/{id}/render`, `GET/POST
+  /renders/{id}(/cancel|/download)`. Renders are CPU-only FFmpeg work on a
+  background thread inside the API process (lifespan starts/stops the
+  manager) — the AI worker is never involved. The filter references the SRT
+  by bare name with `cwd` set to the render dir (no Windows drive-colon
+  escaping). Renders are NOT covered by retention cleanup.
 
 ## Architecture invariants (do not break)
 

@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { api, uploadMedia } from './client'
-import { ACTIVE_JOB_STATUSES, type CreateJobRequest } from '../types'
+import { api, ApiError, uploadMedia } from './client'
+import { ACTIVE_JOB_STATUSES, ACTIVE_RENDER_STATUSES, type CreateJobRequest } from '../types'
 
 export function useHealth() {
   return useQuery({
@@ -122,6 +122,46 @@ export function useSubtitles(jobId: string | undefined, enabled = true) {
     queryKey: ['subtitles', jobId],
     queryFn: () => api.listSubtitles(jobId!),
     enabled: Boolean(jobId) && enabled,
+  })
+}
+
+/** Latest burn-in render: null until one exists; polls while active. */
+export function useRender(jobId: string | undefined) {
+  return useQuery({
+    queryKey: ['render', jobId],
+    queryFn: async () => {
+      try {
+        return await api.getLatestRender(jobId!)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    enabled: Boolean(jobId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status && ACTIVE_RENDER_STATUSES.includes(status) ? 1_500 : false
+    },
+  })
+}
+
+export function useStartRender() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, fontName }: { jobId: string; fontName?: string }) =>
+      api.startRender(jobId, fontName),
+    onSuccess: (_data, variables) =>
+      client.invalidateQueries({ queryKey: ['render', variables.jobId] }),
+  })
+}
+
+export function useCancelRender() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (render: { renderId: string; jobId: string }) =>
+      api.cancelRender(render.renderId),
+    onSuccess: (_data, variables) =>
+      client.invalidateQueries({ queryKey: ['render', variables.jobId] }),
   })
 }
 

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import health, jobs, media, projects, subtitles, system
+from app.api.v1 import health, jobs, media, projects, renders, subtitles, system
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
@@ -11,5 +11,6 @@ api_router.include_router(projects.router, prefix="/projects", tags=["projects"]
 api_router.include_router(media.router, tags=["media"])
 api_router.include_router(jobs.router, tags=["jobs"])
 api_router.include_router(subtitles.router, tags=["subtitles"])
+api_router.include_router(renders.router, tags=["renders"])
 
 __all__ = ["api_router"]

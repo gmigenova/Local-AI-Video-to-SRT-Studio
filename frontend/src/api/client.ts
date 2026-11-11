@@ -13,6 +13,7 @@ import type {
   SyncSubtitleItem,
   SystemInfo,
   UploadResult,
+  VideoRender,
 } from '../types'
 
 const BASE = '/api/v1'
@@ -52,6 +53,10 @@ export function mediaStreamUrl(mediaId: string): string {
 
 export function exportUrl(jobId: string, format: string): string {
   return `${BASE}/jobs/${jobId}/export/${format}`
+}
+
+export function renderDownloadUrl(renderId: string): string {
+  return `${BASE}/renders/${renderId}/download`
 }
 
 export const api = {
@@ -122,6 +127,19 @@ export const api = {
       `/jobs/${jobId}/subtitles/reprocess`,
       { method: 'POST' },
     ),
+
+  // video render (subtitle burn-in)
+  startRender: (jobId: string, fontName?: string) =>
+    request<{ render_id: string; status: string }>(`/jobs/${jobId}/render`, {
+      method: 'POST',
+      body: JSON.stringify(fontName ? { font_name: fontName } : {}),
+    }),
+  getLatestRender: (jobId: string) =>
+    request<VideoRender>(`/jobs/${jobId}/render`),
+  cancelRender: (renderId: string) =>
+    request<{ render_id: string; status: string }>(`/renders/${renderId}/cancel`, {
+      method: 'POST',
+    }),
 }
 
 /// Upload with progress (fetch cannot report upload progress; use XHR).

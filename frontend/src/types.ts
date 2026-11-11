@@ -126,6 +126,34 @@ export interface SyncSubtitleItem {
   is_edited: boolean
 }
 
+export type RenderStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelling'
+  | 'cancelled'
+
+export const ACTIVE_RENDER_STATUSES: RenderStatus[] = [
+  'queued',
+  'running',
+  'cancelling',
+]
+
+export interface VideoRender {
+  render_id: string
+  job_id: string
+  status: RenderStatus
+  progress: number
+  current_stage: string | null
+  error_message: string | null
+  font_name: string | null
+  file_size: number
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
 export interface TranscriptionSettings {
   beam_size?: number
   best_of?: number

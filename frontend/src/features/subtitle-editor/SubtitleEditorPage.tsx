@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Download,
+  Film,
   Plus,
   Redo2,
   RefreshCw,
@@ -21,6 +22,7 @@ import { exportUrl } from '../../api/client'
 import { useJob, useMediaItem, useSubtitles } from '../../api/hooks'
 import { api } from '../../api/client'
 import { Badge, Button, Card, Spinner, StatusBadge, cn } from '../../components/ui'
+import BurnInVideo from './components/BurnInVideo'
 import EditorVideoPlayer from './components/EditorVideoPlayer'
 import Timeline from './components/Timeline'
 import SubtitleRow from './components/SubtitleRow'
@@ -45,6 +47,7 @@ export default function SubtitleEditorPage() {
   const [showSearch, setShowSearch] = useState(false)
   const [search, setSearch] = useState('')
   const [showWarnings, setShowWarnings] = useState(false)
+  const [showRender, setShowRender] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const loadedToken = useRef(-1)
 
@@ -259,8 +262,23 @@ export default function SubtitleEditorPage() {
               </Button>
             </a>
           ))}
+          <Button
+            variant="secondary"
+            onClick={() => setShowRender((v) => !v)}
+            title="Burn subtitles into the video (hardsub)"
+          >
+            <Film size={15} /> Video
+          </Button>
         </div>
       </div>
+
+      {showRender ? (
+        <BurnInVideo
+          jobId={jobId!}
+          onBeforeStart={editor.save}
+          onClose={() => setShowRender(false)}
+        />
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* left: video + timeline + warnings */}

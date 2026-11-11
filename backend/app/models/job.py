@@ -13,8 +13,8 @@ from app.database.base import Base
 from app.models.common import new_id, utcnow
 
 if TYPE_CHECKING:
-    from app.models.media_file import MediaFile
     from app.models.job_settings import TranscriptionSettings
+    from app.models.media_file import MediaFile
     from app.models.segment import TranscriptionSegment
 
 
