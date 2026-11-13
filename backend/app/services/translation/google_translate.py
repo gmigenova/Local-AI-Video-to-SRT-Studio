@@ -17,9 +17,23 @@ import json
 import logging
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
 
 from app.core.config import Settings, get_settings
+from app.services.translation.base import (
+    FALLBACK_LANGUAGES,
+    TranslationResult,
+    TranslationServiceError,
+    is_valid_language_code,
+)
+
+__all__ = [
+    "FALLBACK_LANGUAGES",
+    "GoogleTranslateClient",
+    "TranslationResult",
+    "TranslationServiceError",
+    "is_translation_configured",
+    "make_translator",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -31,71 +45,6 @@ _LANGUAGES_URL = f"{_TRANSLATE_URL}/languages"
 _MAX_TEXTS_PER_REQUEST = 64
 _MAX_CHARS_PER_REQUEST = 4000
 
-#: Curated fallback catalog shown when the API key is not configured (or the
-#: live supported-languages call fails).  ``native`` is the endonym shown in
-#: the UI alongside the English name.
-FALLBACK_LANGUAGES: list[dict[str, str]] = [
-    {"code": "th", "name": "Thai", "native": "ไทย"},
-    {"code": "en", "name": "English", "native": "English"},
-    {"code": "zh-CN", "name": "Chinese (Simplified)", "native": "简体中文"},
-    {"code": "zh-TW", "name": "Chinese (Traditional)", "native": "繁體中文"},
-    {"code": "ja", "name": "Japanese", "native": "日本語"},
-    {"code": "ko", "name": "Korean", "native": "한국어"},
-    {"code": "vi", "name": "Vietnamese", "native": "Tiếng Việt"},
-    {"code": "id", "name": "Indonesian", "native": "Bahasa Indonesia"},
-    {"code": "ms", "name": "Malay", "native": "Bahasa Melayu"},
-    {"code": "km", "name": "Khmer", "native": "ខ្មែរ"},
-    {"code": "lo", "name": "Lao", "native": "ລາວ"},
-    {"code": "my", "name": "Burmese", "native": "မြန်မာ"},
-    {"code": "de", "name": "German", "native": "Deutsch"},
-    {"code": "fr", "name": "French", "native": "Français"},
-    {"code": "es", "name": "Spanish", "native": "Español"},
-    {"code": "pt", "name": "Portuguese", "native": "Português"},
-    {"code": "it", "name": "Italian", "native": "Italiano"},
-    {"code": "nl", "name": "Dutch", "native": "Nederlands"},
-    {"code": "ru", "name": "Russian", "native": "Русский"},
-    {"code": "uk", "name": "Ukrainian", "native": "Українська"},
-    {"code": "pl", "name": "Polish", "native": "Polski"},
-    {"code": "tr", "name": "Turkish", "native": "Türkçe"},
-    {"code": "ar", "name": "Arabic", "native": "العربية"},
-    {"code": "fa", "name": "Persian", "native": "فارسی"},
-    {"code": "hi", "name": "Hindi", "native": "हिन्दी"},
-    {"code": "bn", "name": "Bengali", "native": "বাংলা"},
-    {"code": "ta", "name": "Tamil", "native": "தமிழ்"},
-    {"code": "ur", "name": "Urdu", "native": "اردو"},
-    {"code": "tl", "name": "Filipino", "native": "Filipino"},
-]
-
-
-class TranslationServiceError(Exception):
-    """Raised with an HTTP status + clean user-facing message."""
-
-    def __init__(self, status_code: int, message: str) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.message = message
-
-
-@dataclass
-class TranslationResult:
-    """Translated texts aligned 1:1 with the input list + usage metrics."""
-
-    texts: list[str]
-    detected_source_language: str | None = None
-    #: characters actually sent to the API (Google's billing/quota unit)
-    characters_sent: int = 0
-    #: number of HTTP requests made (one per batch)
-    requests: int = 0
-
-
-def _is_valid_language_code(code: str) -> bool:
-    """Loose BCP-47-ish check: ``th`` / ``zh-CN`` style codes only."""
-    parts = code.split("-")
-    if not (1 <= len(parts) <= 2) or not all(parts):
-        return False
-    if not (2 <= len(parts[0]) <= 3 and parts[0].isalpha()):
-        return False
-    return len(parts) == 1 or (2 <= len(parts[1]) <= 8 and parts[1].replace("_", "").isalnum())
 
 
 class GoogleTranslateClient:
@@ -116,11 +65,11 @@ class GoogleTranslateClient:
 
         Empty strings are passed through untouched (the API rejects them).
         """
-        if not _is_valid_language_code(target_language):
+        if not is_valid_language_code(target_language):
             raise TranslationServiceError(
                 400, f"Unsupported target language code: '{target_language}'."
             )
-        if source_language is not None and not _is_valid_language_code(source_language):
+        if source_language is not None and not is_valid_language_code(source_language):
             raise TranslationServiceError(
                 400, f"Unsupported source language code: '{source_language}'."
             )

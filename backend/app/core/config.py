@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     #: monthly character budget (Google meters per character); 0 = unlimited
     google_translate_monthly_char_limit: int = 500_000
 
+    # Ollama (local TranslateGemma translation; free, no metering)
+    ollama_url: str = "http://127.0.0.1:11434"
+    ollama_translate_model: str = "translategemma:12b"
+    ollama_timeout_seconds: float = 300.0
+
     # Retention / automatic cleanup (days; 0 disables the rule)
     retention_temp_days: int = 7
     retention_audio_days: int = 14

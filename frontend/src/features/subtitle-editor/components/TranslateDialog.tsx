@@ -1,6 +1,7 @@
-// Translate dialog: pick source/target language + mode, then Google Cloud
-// Translation is applied to the whole subtitle list (one undo step).
-// Shows the month's character usage so the API budget is never a surprise.
+// Translate dialog: pick engine (Ollama TranslateGemma local / Google
+// Cloud), source/target language + mode, then translate the whole subtitle
+// list (applied as one undo step). Google shows the monthly character
+// budget; Ollama is free/local and needs an explicit source language.
 
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -8,7 +9,7 @@ import { AlertTriangle, Check, Info, Languages } from 'lucide-react'
 
 import { api } from '../../../api/client'
 import { useTranslationInfo, useTranslationUsage } from '../../../api/hooks'
-import type { TranslateMode, TranslateResult } from '../../../types'
+import type { TranslationEngineId, TranslateMode, TranslateResult } from '../../../types'
 import { Button, Field, Modal, Progress, Spinner, inputClass } from '../../../components/ui'
 
 interface TranslateDialogProps {
@@ -41,6 +42,16 @@ export default function TranslateDialog({
     [info.data],
   )
 
+  const googleConfigured = info.data?.configured ?? false
+  const ollama = info.data?.engines?.ollama
+  const ollamaAvailable = ollama?.available ?? false
+  const defaultModel = ollama?.model ?? 'translategemma:12b'
+
+  // engine defaults to Ollama (local-first) when reachable
+  const [engine, setEngine] = useState<TranslationEngineId>(
+    ollamaAvailable ? 'ollama' : 'google',
+  )
+  const [model, setModel] = useState<string>(defaultModel)
   // default target: Thai unless the video is already Thai, then English
   const [target, setTarget] = useState<string>(detectedLanguage === 'th' ? 'en' : 'th')
   const [source, setSource] = useState<string>(detectedLanguage ?? 'auto')
@@ -48,7 +59,7 @@ export default function TranslateDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // keep the selects valid if the catalog loads after the defaults were set
+  // keep the selects valid once the catalog / engine status loads
   useEffect(() => {
     const langs = info.data?.languages
     if (!langs?.length) return
@@ -57,7 +68,18 @@ export default function TranslateDialog({
     setSource((s) => (s !== 'auto' && !codes.has(s) ? (detectedLanguage ?? 'auto') : s))
   }, [info.data, detectedLanguage])
 
-  const configured = info.data?.configured ?? false
+  // engine/model defaults arrive with the engine status (after first render)
+  useEffect(() => {
+    if (info.data && ollamaAvailable) {
+      setEngine((e) => (e === 'google' ? 'ollama' : e))
+      setModel((m) => (m === 'translategemma:12b' && ollama?.model ? ollama.model : m))
+    }
+  }, [info.data, ollamaAvailable, ollama?.model])
+
+  // TranslateGemma needs an explicit source: never leave it on auto
+  const effectiveSource =
+    engine === 'ollama' && source === 'auto' ? (detectedLanguage ?? null) : source
+  const ollamaMissingSource = engine === 'ollama' && effectiveSource === null
 
   const submit = async () => {
     setBusy(true)
@@ -67,11 +89,15 @@ export default function TranslateDialog({
       const saved = await onBeforeTranslate()
       if (!saved) throw new Error('Could not save pending edits. Try again.')
       const result = await api.translateSubtitles(jobId, {
+        engine,
         target_language: target,
-        source_language: source === 'auto' ? null : source,
+        source_language: effectiveSource,
         mode,
+        ...(engine === 'ollama' ? { model } : {}),
       })
-      void queryClient.invalidateQueries({ queryKey: ['translation-usage'] })
+      if (engine === 'google') {
+        void queryClient.invalidateQueries({ queryKey: ['translation-usage'] })
+      }
       onApply(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Translation failed')
@@ -84,51 +110,20 @@ export default function TranslateDialog({
   const limit = usage.data?.monthly_char_limit ?? 0
   // remaining is null only when unlimited (limit = 0)
   const remaining = limit > 0 ? (usage.data?.remaining_chars ?? 0) : null
+  const modelInstalled = (ollama?.models ?? []).includes(model)
+  const canSubmit =
+    !busy && !!target && !ollamaMissingSource && (engine === 'google' || !!model)
+
+  const showGoogleWarning = engine === 'google' && !googleConfigured
 
   return (
     <Modal open title="Translate subtitles" onClose={busy ? () => undefined : onClose}>
       <div className="space-y-4">
         <p className="flex items-center gap-2 text-xs text-muted">
           <Languages size={14} className="shrink-0" />
-          Google Cloud Translation · {subtitleCount} subtitle{subtitleCount === 1 ? '' : 's'}
+          {engine === 'ollama' ? `Ollama · ${model}` : 'Google Cloud Translation'} ·{' '}
+          {subtitleCount} subtitle{subtitleCount === 1 ? '' : 's'}
         </p>
-
-        {configured ? (
-          <div className="rounded-lg border border-line bg-surface-2/40 px-3.5 py-2.5 text-xs">
-            {limit > 0 ? (
-              <>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted">
-                    This month: <b className="text-text">{used.toLocaleString()}</b> /{' '}
-                    {limit.toLocaleString()} characters
-                  </span>
-                  <span
-                    className={
-                      remaining !== null && remaining < pendingChars
-                        ? 'font-medium text-danger'
-                        : 'text-muted'
-                    }
-                  >
-                    {remaining !== null ? remaining.toLocaleString() : '—'} left
-                  </span>
-                </div>
-                <Progress value={(used / limit) * 100} />
-              </>
-            ) : (
-              <p className="text-muted">
-                This month: <b className="text-text">{used.toLocaleString()}</b> characters
-                (no limit set)
-              </p>
-            )}
-            <p className="mt-1.5 text-muted/80">
-              This request sends ~{pendingChars.toLocaleString()} characters
-              {remaining !== null && remaining < pendingChars
-                ? ' — over the remaining budget, it will be rejected'
-                : ''}
-              {' '}· {(usage.data?.words_sent ?? 0).toLocaleString()} words translated so far
-            </p>
-          </div>
-        ) : null}
 
         {info.isLoading ? (
           <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted">
@@ -139,40 +134,172 @@ export default function TranslateDialog({
             <AlertTriangle size={15} className="mt-0.5 shrink-0" />
             Could not load the language list. Is the backend running?
           </div>
-        ) : !configured ? (
-          <div className="space-y-3">
-            <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 px-3.5 py-3 text-sm text-warning">
-              <Info size={15} className="mt-0.5 shrink-0" />
-              <div className="min-w-0">
-                <p className="font-medium">Google Cloud Translation is not configured.</p>
-                <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-warning/90">
-                  <li>
-                    In Google Cloud Console enable the <b>Cloud Translation API</b> and create an
-                    API key (APIs &amp; Services → Credentials).
-                  </li>
-                  <li>
-                    Paste it into <code className="font-mono">GOOGLE_TRANSLATE_API_KEY</code> in
-                    the <code className="font-mono">.env</code> file.
-                  </li>
-                  <li>Restart the backend, then reopen this dialog.</li>
-                </ol>
-              </div>
-            </div>
-            <Button variant="secondary" className="w-full" onClick={onClose}>
-              Close
-            </Button>
-          </div>
         ) : (
           <>
+            {/* engine selector */}
+            <Field label="Engine">
+              <div className="space-y-1.5">
+                <ModeOption
+                  active={engine === 'ollama'}
+                  disabled={busy || !ollamaAvailable}
+                  onSelect={() => setEngine('ollama')}
+                  title="Ollama (local)"
+                  description={
+                    ollamaAvailable
+                      ? 'TranslateGemma on your machine — free, private'
+                      : 'Not reachable — is Ollama running?'
+                  }
+                />
+                <ModeOption
+                  active={engine === 'google'}
+                  disabled={busy || !googleConfigured}
+                  onSelect={() => setEngine('google')}
+                  title="Google Cloud Translation"
+                  description={
+                    googleConfigured
+                      ? 'Cloud API — fast, monthly character budget'
+                      : 'Not configured — GOOGLE_TRANSLATE_API_KEY is unset'
+                  }
+                />
+              </div>
+            </Field>
+
+            {/* Ollama: model picker */}
+            {engine === 'ollama' ? (
+              ollamaAvailable ? (
+                <Field label="Model" hint="Installed models come from your Ollama server">
+                  <select
+                    className={inputClass}
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    disabled={busy}
+                  >
+                    {(ollama?.models ?? []).map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                    {!modelInstalled ? (
+                      <option value={model}>{model} (not installed)</option>
+                    ) : null}
+                  </select>
+                  {!modelInstalled ? (
+                    <p className="mt-1 text-xs text-warning">
+                      Run <code className="font-mono">ollama pull {model}</code> to install
+                      this model first.
+                    </p>
+                  ) : null}
+                </Field>
+              ) : (
+                <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 px-3.5 py-3 text-sm text-warning">
+                  <Info size={15} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium">Ollama is not reachable.</p>
+                    <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-warning/90">
+                      <li>
+                        Install Ollama from{' '}
+                        <a
+                          href="https://ollama.com"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          ollama.com
+                        </a>{' '}
+                        and start it.
+                      </li>
+                      <li>
+                        <code className="font-mono">ollama pull {defaultModel}</code>
+                      </li>
+                      <li>
+                        Non-default server or model? Set{' '}
+                        <code className="font-mono">OLLAMA_URL</code> /{' '}
+                        <code className="font-mono">OLLAMA_TRANSLATE_MODEL</code> in{' '}
+                        <code className="font-mono">.env</code> and restart the backend.
+                      </li>
+                    </ol>
+                  </div>
+                </div>
+              )
+            ) : null}
+
+            {/* Google: budget box */}
+            {engine === 'google' && googleConfigured ? (
+              <div className="rounded-lg border border-line bg-surface-2/40 px-3.5 py-2.5 text-xs">
+                {limit > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted">
+                        This month: <b className="text-text">{used.toLocaleString()}</b> /{' '}
+                        {limit.toLocaleString()} characters
+                      </span>
+                      <span
+                        className={
+                          remaining !== null && remaining < pendingChars
+                            ? 'font-medium text-danger'
+                            : 'text-muted'
+                        }
+                      >
+                        {remaining !== null ? remaining.toLocaleString() : '—'} left
+                      </span>
+                    </div>
+                    <Progress value={(used / limit) * 100} />
+                  </>
+                ) : (
+                  <p className="text-muted">
+                    This month: <b className="text-text">{used.toLocaleString()}</b>{' '}
+                    characters (no limit set)
+                  </p>
+                )}
+                <p className="mt-1.5 text-muted/80">
+                  This request sends ~{pendingChars.toLocaleString()} characters
+                  {remaining !== null && remaining < pendingChars
+                    ? ' — over the remaining budget, it will be rejected'
+                    : ''}
+                  {' '}· {(usage.data?.words_sent ?? 0).toLocaleString()} words translated so
+                  far
+                </p>
+              </div>
+            ) : null}
+
+            {/* Google not configured hint */}
+            {showGoogleWarning ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/5 px-3.5 py-3 text-sm text-warning">
+                <Info size={15} className="mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-medium">Google Cloud Translation is not configured.</p>
+                  <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs text-warning/90">
+                    <li>
+                      In Google Cloud Console enable the <b>Cloud Translation API</b> and
+                      create an API key (APIs &amp; Services → Credentials).
+                    </li>
+                    <li>
+                      Paste it into <code className="font-mono">GOOGLE_TRANSLATE_API_KEY</code>{' '}
+                      in the <code className="font-mono">.env</code> file.
+                    </li>
+                    <li>Restart the backend, then reopen this dialog.</li>
+                  </ol>
+                </div>
+              </div>
+            ) : null}
+
+            {/* languages */}
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Translate from">
+              <Field
+                label="Translate from"
+                hint={
+                  engine === 'ollama' && source === 'auto' && detectedLanguage
+                    ? `Auto is not supported here — using the detected language (${detectedLanguage})`
+                    : undefined
+                }
+              >
                 <select
                   className={inputClass}
-                  value={source}
+                  value={effectiveSource ?? ''}
                   onChange={(e) => setSource(e.target.value)}
                   disabled={busy}
                 >
-                  <option value="auto">Auto-detect</option>
+                  {engine === 'google' ? <option value="auto">Auto-detect</option> : null}
                   {languages.map((lang) => (
                     <option key={lang.code} value={lang.code}>
                       {lang.name}
@@ -195,6 +322,13 @@ export default function TranslateDialog({
                 </select>
               </Field>
             </div>
+
+            {ollamaMissingSource ? (
+              <p className="text-xs text-warning">
+                Ollama needs an explicit source language — this job has no detected
+                language. Pick one above.
+              </p>
+            ) : null}
 
             <Field label="Result">
               <div className="space-y-1.5">
@@ -229,7 +363,7 @@ export default function TranslateDialog({
               <Button variant="secondary" onClick={onClose} disabled={busy}>
                 Cancel
               </Button>
-              <Button onClick={() => void submit()} disabled={busy || !target}>
+              <Button onClick={() => void submit()} disabled={!canSubmit}>
                 {busy ? <Spinner className="h-4 w-4" /> : <Languages size={15} />} Translate
               </Button>
             </div>

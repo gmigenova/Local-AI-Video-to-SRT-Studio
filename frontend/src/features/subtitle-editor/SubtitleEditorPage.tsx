@@ -391,7 +391,7 @@ export default function SubtitleEditorPage() {
           />
           <Button
             variant="secondary"
-            title="Translate all subtitles with Google Cloud Translation"
+            title="Translate all subtitles (local Ollama TranslateGemma or Google Cloud)"
             onClick={() => {
               setNotice(null)
               setShowTranslate(true)
@@ -495,13 +495,16 @@ export default function SubtitleEditorPage() {
               result.source_language ?? result.detected_source_language,
             )
             const to = languageName(result.target_language)
-            const usage = result.usage
-            const budget =
-              usage.monthly_char_limit > 0
-                ? ` · ${usage.characters_sent.toLocaleString()} / ${usage.monthly_char_limit.toLocaleString()} chars this month`
-                : ` · ${usage.characters_sent.toLocaleString()} chars this month`
+            const engineNote =
+              result.engine === 'ollama' ? ` · via Ollama (${result.model})` : ''
+            const budget = result.usage
+              ? result.usage.monthly_char_limit > 0
+                ? ` · ${result.usage.characters_sent.toLocaleString()} / ${result.usage.monthly_char_limit.toLocaleString()} chars this month`
+                : ` · ${result.usage.characters_sent.toLocaleString()} chars this month`
+              : ''
             setNotice(
               `Translated ${result.translated} of ${result.total} subtitles (${from} → ${to})` +
+                engineNote +
                 budget +
                 (changed === 0 ? ' — no visible changes.' : '. Undo with Ctrl+Z.'),
             )

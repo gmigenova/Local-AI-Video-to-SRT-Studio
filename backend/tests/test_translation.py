@@ -11,15 +11,10 @@ import urllib.error
 
 import pytest
 from fastapi.testclient import TestClient
+from translation_fixtures import clear_subtitles, seed_translation_job
 
 from app.core.config import get_settings
-from app.database.base import get_session_factory
 from app.main import app
-from app.models.media_file import MediaFile
-from app.models.project import Project
-from app.repositories.jobs import JobsRepository
-from app.repositories.subtitles import SubtitlesRepository
-from app.services.subtitle.models import Subtitle
 from app.services.translation.google_translate import (
     _TRANSLATE_URL,
     GoogleTranslateClient,
@@ -169,55 +164,9 @@ def client() -> TestClient:
         yield test_client
 
 
-def _seed_job(texts: list[str]) -> str:
-    """Create a project + media + job + subtitle rows; returns the job id."""
-    db = get_session_factory()()
-    try:
-        project = Project(name="Translation Test")
-        db.add(project)
-        db.flush()
-        media = MediaFile(
-            project_id=project.id,
-            original_name="clip.mp4",
-            stored_name="clip.mp4",
-            file_path="clip.mp4",
-        )
-        db.add(media)
-        db.flush()
-        job = JobsRepository(db).create(
-            media_id=media.id, model_name="tiny", language=None, settings_json={}
-        )
-        SubtitlesRepository(db).replace_for_job(
-            job.id,
-            [
-                Subtitle(
-                    index=i,
-                    start_ms=(i - 1) * 2000,
-                    end_ms=(i - 1) * 2000 + 1500,
-                    text=text,
-                    original_text=text,
-                )
-                for i, text in enumerate(texts, start=1)
-            ],
-        )
-        db.commit()
-        return job.id
-    finally:
-        db.close()
-
-
-def _clear_subtitles(job_id: str) -> None:
-    db = get_session_factory()()
-    try:
-        SubtitlesRepository(db).replace_for_job(job_id, [])
-        db.commit()
-    finally:
-        db.close()
-
-
 @pytest.fixture()
 def seeded_job() -> str:
-    return _seed_job(["Hello world", "", "How are you?"])
+    return seed_translation_job(["Hello world", "", "How are you?"])
 
 
 def test_languages_unconfigured_falls_back_to_catalog(
@@ -281,7 +230,7 @@ def test_translate_without_subtitles_is_409(
     client: TestClient, seeded_job: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(get_settings(), "google_translate_api_key", "test-key")
-    _clear_subtitles(seeded_job)
+    clear_subtitles(seeded_job)
     response = client.post(
         f"/api/v1/jobs/{seeded_job}/subtitles/translate",
         json={"target_language": "th"},

@@ -126,24 +126,41 @@ export interface SyncSubtitleItem {
   is_edited: boolean
 }
 
-// ---- Google Cloud Translation (subtitle translation) ----
+// ---- Subtitle translation (Google Cloud Translation + Ollama TranslateGemma) ----
+
+export type TranslationEngineId = 'google' | 'ollama'
 
 export interface TranslateLanguage {
   code: string
   name: string
 }
 
+export interface TranslationEngines {
+  google: { configured: boolean }
+  ollama: {
+    available: boolean
+    url: string
+    model: string
+    models: string[]
+  }
+}
+
 export interface TranslationInfo {
   configured: boolean
   languages: TranslateLanguage[]
+  /** Optional for compatibility with cached pre-engine responses. */
+  engines?: TranslationEngines
 }
 
 export type TranslateMode = 'replace' | 'dual'
 
 export interface TranslateRequest {
+  engine: TranslationEngineId
   target_language: string
   source_language: string | null
   mode: TranslateMode
+  /** Ollama-only: override the configured model. */
+  model?: string | null
 }
 
 export interface TranslatedTextItem {
@@ -166,6 +183,8 @@ export interface TranslationUsage {
 
 export interface TranslateResult {
   job_id: string
+  engine: TranslationEngineId
+  model: string | null
   target_language: string
   source_language: string | null
   detected_source_language: string | null
@@ -173,7 +192,8 @@ export interface TranslateResult {
   translated: number
   total: number
   subtitles: TranslatedTextItem[]
-  usage: TranslationUsage
+  /** null for the Ollama engine (local, not metered). */
+  usage: TranslationUsage | null
 }
 
 export type RenderStatus =

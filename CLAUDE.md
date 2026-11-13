@@ -107,6 +107,27 @@ hardcode absolute user paths (§20.11).
   APIs: `GET /translation/usage`; translate responses include the updated
   `usage` block, which the Translate dialog (budget bar + per-request
   estimate) and the editor notice display.
+- **Post-spec: local translation engine (Ollama TranslateGemma)** — a
+  second, free, fully local engine alongside Google:
+  `app/services/translation/ollama_translate.py` (stdlib urllib; shared
+  types live in `translation/base.py`, which `google_translate.py`
+  re-exports). Uses the official single-user-message prompt template from
+  ollama.com/library/translategemma (two blank lines before the text;
+  source language is baked into the prompt — no auto-detect; `zh-CN/TW`
+  alias to `zh-Hans/Hant`). Cues are batched ≤25/3000 chars one-line-per-cue
+  with a line-count instruction; a line-count mismatch falls back to
+  per-cue requests, and a still-failing cue raises a clean 502. Settings:
+  `OLLAMA_URL`, `OLLAMA_TRANSLATE_MODEL` (default `translategemma:12b`),
+  `OLLAMA_TIMEOUT_SECONDS` (300). API: `engine`+`model` request fields on
+  POST translate (API default stays `"google"`; the UI sends it explicitly
+  and defaults to Ollama when reachable), and a per-engine `engines` block
+  on `GET /translation/languages` (legacy `configured`/`languages` kept;
+  `engines.ollama.models` comes from a short-timeout `/api/tags` probe).
+  The Ollama path skips the quota guard and metering (`usage: null`;
+  source resolution: `payload.source_language → job.detected_language →
+  400`). Errors map cleanly: unreachable → 502, model missing → 404 with
+  an `ollama pull` hint. UI: engine selector + installed-model dropdown +
+  install-steps warning in `TranslateDialog`; budget box only for Google.
 - **Post-spec: project deletion UI** — the `DELETE /projects/{id}` endpoint
   (existed since Phase 2) is now guarded + surfaced in the UI: trash button
   on project cards and a Delete button on the project detail page, both
