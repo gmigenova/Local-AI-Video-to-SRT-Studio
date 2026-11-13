@@ -162,18 +162,24 @@ export default function SubtitleEditorPage() {
     else video.pause()
   }, [])
 
+  /** Bring a subtitle row into view in the list ('nearest' for small moves,
+   *  'center' for jumps like a timeline click). */
+  const scrollToRow = useCallback((key: string, block: ScrollLogicalPosition = 'nearest') => {
+    document.getElementById(`subtitle-row-${key}`)?.scrollIntoView({
+      behavior: 'smooth',
+      block,
+    })
+  }, [])
+
   const selectIndex = useCallback(
     (index: number) => {
       if (index < 0 || index >= editor.subs.length) return
       const row = editor.subs[index]
       setSelectedKey(row.key)
       seek(row.start_ms + 10) // follow selection: video jumps to the cue
-      document.getElementById(`subtitle-row-${row.key}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-      })
+      scrollToRow(row.key)
     },
-    [editor.subs, seek],
+    [editor.subs, seek, scrollToRow],
   )
 
   /** Click on a subtitle row: select it and seek the video to its cue.
@@ -530,7 +536,12 @@ export default function SubtitleEditorPage() {
             activeKey={activeKey}
             selectedKey={selectedKey}
             onSeek={seek}
-            onSelect={setSelectedKey}
+            onSelect={(key) => {
+              // clicking a timeline block: select the row and bring it into
+              // view (centered - the jump can be far from the current scroll)
+              setSelectedKey(key)
+              scrollToRow(key, 'center')
+            }}
           />
 
           {/* warnings panel (§11.6) */}
