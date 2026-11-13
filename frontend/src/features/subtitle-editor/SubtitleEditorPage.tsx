@@ -163,11 +163,15 @@ export default function SubtitleEditorPage() {
   }, [])
 
   /** Bring a subtitle row into view in the list ('nearest' for small moves,
-   *  'center' for jumps like a timeline click). */
+   *  'center' for jumps like a timeline/warning click).
+   *  Deferred by one frame: selecting a row EXPANDS it (edit panel), and the
+   *  scroll must be computed against the expanded height. */
   const scrollToRow = useCallback((key: string, block: ScrollLogicalPosition = 'nearest') => {
-    document.getElementById(`subtitle-row-${key}`)?.scrollIntoView({
-      behavior: 'smooth',
-      block,
+    requestAnimationFrame(() => {
+      document.getElementById(`subtitle-row-${key}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block,
+      })
     })
   }, [])
 
@@ -577,6 +581,7 @@ export default function SubtitleEditorPage() {
                         onClick={() => {
                           setSelectedKey(sub.key)
                           seek(sub.start_ms + 10)
+                          scrollToRow(sub.key, 'center') // bring the row into view
                         }}
                       >
                         <span className="w-7 text-right font-mono text-[11px] text-muted">
