@@ -108,6 +108,56 @@ def test_batching_within_caps(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.requests == len(batch_sizes)
 
 
+def test_numbered_batch_reply_is_cleaned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Models sometimes number the reply lines despite the prompt; the
+    enumeration prefixes must be stripped, not pasted into subtitles."""
+
+    def fake_request(self: OllamaTranslateClient, path: str, body: dict | None = None,
+                     timeout: float | None = None) -> dict:
+        lines = body["messages"][0]["content"].split("\n\n\n")[1].split("\n")
+        reply = "\n".join(f"{i}. แปล-{line}" for i, line in enumerate(lines, start=1))
+        return _chat_reply(reply)
+
+    monkeypatch.setattr(OllamaTranslateClient, "_request", fake_request)
+    ollama = OllamaTranslateClient("http://x", "m")
+    result = ollama.translate(["one", "two", "three"], "th", "en")
+
+    assert result.texts == ["แปล-one", "แปล-two", "แปล-three"]
+
+
+def test_genuine_leading_digits_survive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Digits that genuinely start a subtitle (countdowns, amounts) are
+    only enumeration when the number matches the line's position - here
+    none do, so every line passes through untouched."""
+
+    reply = "3. 2. 1. ขึ้น\n10 บาทที่เหลือ\nepisode 12 begins"
+    monkeypatch.setattr(
+        OllamaTranslateClient,
+        "_request",
+        lambda self, path, body=None, timeout=None: _chat_reply(reply),
+    )
+    ollama = OllamaTranslateClient("http://x", "m")
+    result = ollama.translate(["a", "b", "c"], "th", "en")
+
+    assert result.texts == reply.split("\n")
+
+
+def test_batch_prompt_forbids_line_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    prompts: list[str] = []
+
+    def fake_request(self: OllamaTranslateClient, path: str, body: dict | None = None,
+                     timeout: float | None = None) -> dict:
+        prompts.append(body["messages"][0]["content"])
+        return _chat_reply("one\ntwo")
+
+    monkeypatch.setattr(OllamaTranslateClient, "_request", fake_request)
+    ollama = OllamaTranslateClient("http://x", "m")
+    ollama.translate(["one", "two"], "th", "en")
+
+    assert "no line numbers" in prompts[0]
+    assert "no bullet points" in prompts[0]
+
+
 def test_line_mismatch_falls_back_per_cue(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
 

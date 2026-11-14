@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 
@@ -41,6 +42,10 @@ _TAGS_TIMEOUT_SECONDS = 2.5
 #: TranslateGemma uses BCP-47 script codes where the shared catalog uses
 #: Google-style region codes.
 _CODE_ALIASES = {"zh-CN": "zh-Hans", "zh-TW": "zh-Hant"}
+
+#: Model-added enumeration prefixes ("1. text", "2) text", "Line 3 - text")
+#: that sometimes appear in batch replies despite the prompt.
+_ENUMERATION = re.compile(r"^(?:line\s*)?(?P<n>\d+)[.):]?\s+", re.IGNORECASE)
 
 #: Official TranslateGemma prompt (ollama.com/library/translategemma), with
 #: TWO blank lines before the text.  ``batch_note`` adds a line-count
@@ -114,7 +119,7 @@ class OllamaTranslateClient:
 
             lines = self._split_lines(content)
             if len(lines) == len(batch):
-                for slot, line in zip(positions, lines, strict=True):
+                for slot, line in zip(positions, self._strip_line_numbers(lines), strict=True):
                     results[slot] = line
                 continue
 
@@ -166,8 +171,9 @@ class OllamaTranslateClient:
             if len(batch) == 1
             else (
                 f" The text consists of {len(batch)} subtitle lines. Translate "
-                f"each line separately and output exactly {len(batch)} lines "
-                "in the same order."
+                f"each line separately and output exactly {len(batch)} plain "
+                "lines in the same order - no line numbers, no bullet "
+                "points, one translation per line."
             )
         )
         return _PROMPT_TEMPLATE.format(
@@ -187,6 +193,29 @@ class OllamaTranslateClient:
         while lines and not lines[-1]:
             lines.pop()
         return lines
+
+    @staticmethod
+    def _strip_line_numbers(lines: list[str]) -> list[str]:
+        """Drop model-added enumeration prefixes ("1. text", "2) text").
+
+        A prefix is removed only when its number matches the line's
+        position in the reply AND at least half the lines carry such a
+        matching number, so genuine text that happens to start with
+        digits (countdowns, amounts, lyric numbering) survives.
+        """
+        if len(lines) < 2:
+            return lines
+        matches = [_ENUMERATION.match(line) for line in lines]
+        aligned = [
+            match is not None and match.group("n") == str(position)
+            for position, match in enumerate(matches, start=1)
+        ]
+        if sum(aligned) * 2 < len(lines):
+            return lines
+        return [
+            line[match.end() :] if ok and match is not None else line
+            for line, match, ok in zip(lines, matches, aligned, strict=True)
+        ]
 
     def _batches(
         self, texts: list[str]
