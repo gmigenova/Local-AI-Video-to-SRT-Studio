@@ -1,10 +1,11 @@
 // Transcription settings form (§11.3): model, language, quality, advanced.
 // No translation, no speaker identification (spec).
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 
 import { useSettingsStore } from '../stores/settings'
+import { useSystemInfo } from '../api/hooks'
 import { Button, Field, inputClass } from './ui'
 
 const LANGUAGES: { value: string; label: string }[] = [
@@ -38,7 +39,19 @@ export default function TranscriptionSettingsForm({
   submitLabel?: string
 }) {
   const store = useSettingsStore()
+  const system = useSystemInfo()
   const [advanced, setAdvanced] = useState(false)
+
+  // A remembered "diarize on" must not silently apply when the backend
+  // reports the feature unavailable (token/dependency missing). The block
+  // can also be absent entirely - a backend older than this feature or a
+  // stale query cache - which counts as unavailable, never a crash.
+  const diarization = system.data?.diarization
+  useEffect(() => {
+    if (diarization && !diarization.available && store.diarize) {
+      store.patch({ diarize: false })
+    }
+  }, [diarization, store])
 
   return (
     <form
@@ -154,6 +167,23 @@ export default function TranscriptionSettingsForm({
                 <span className="block text-[11px] text-muted">
                   Can make subtitles drift after long silences — leave off for long
                   videos
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                checked={store.diarize && (diarization?.available ?? false)}
+                disabled={!diarization?.available}
+                onChange={(e) => store.patch({ diarize: e.target.checked })}
+              />
+              <span>
+                Identify speakers (diarization)
+                <span className="block text-[11px] text-muted">
+                  {diarization?.available
+                    ? 'Labels who is speaking — adds significant CPU time on long videos'
+                    : (diarization?.reason ?? 'Checking availability…')}
                 </span>
               </span>
             </label>

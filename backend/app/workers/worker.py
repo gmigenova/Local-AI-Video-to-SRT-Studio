@@ -32,6 +32,7 @@ from app.models.segment import TranscriptionSegment
 from app.pipeline import PipelineResult, TranscriptionPipeline
 from app.repositories.jobs import JobsRepository
 from app.repositories.subtitles import SubtitlesRepository
+from app.services.diarization import make_diarizer
 from app.services.subtitle import SubtitleRules
 from app.services.transcription import TranscriptionOptions
 from app.workers import heartbeat
@@ -44,6 +45,7 @@ _STAGE_STATUS: dict[str, JobStatus] = {
     "Extracting": JobStatus.EXTRACTING_AUDIO,
     "Loading model": JobStatus.TRANSCRIBING,
     "Transcribing": JobStatus.TRANSCRIBING,
+    "Identifying speakers": JobStatus.TRANSCRIBING,
     "Processing subtitles": JobStatus.PROCESSING_SUBTITLES,
     "Exporting": JobStatus.PROCESSING_SUBTITLES,
     "Completed": JobStatus.PROCESSING_SUBTITLES,
@@ -65,6 +67,7 @@ _OPTION_KEYS = {
     "initial_prompt",
     "vad_threshold",
     "vad_min_silence_ms",
+    "diarize",
 }
 _RULE_KEYS = set(SubtitleRules.model_fields)
 
@@ -103,7 +106,10 @@ class JobWorker:
         self.settings = settings or get_settings()
         self._session_factory = session_factory or get_session_factory()
         self._pipeline_factory: PipelineFactory = pipeline_factory or (
-            lambda: TranscriptionPipeline(settings=self.settings)
+            lambda: TranscriptionPipeline(
+                settings=self.settings,
+                diarizer=make_diarizer(self.settings),
+            )
         )
         self.poll_interval = poll_interval or self.settings.worker_poll_interval
         self._stop = threading.Event()
@@ -236,6 +242,13 @@ class JobWorker:
                 transcripts_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(
                     result.transcript_path, transcripts_dir / "transcript.json"
+                )
+
+            # ...and the diarization turns (kept forever; drives reprocess).
+            if result.diarization_path is not None and result.diarization_path.is_file():
+                transcripts_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(
+                    result.diarization_path, transcripts_dir / "diarization.json"
                 )
 
             jobs.update_status(

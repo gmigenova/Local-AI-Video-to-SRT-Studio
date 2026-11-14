@@ -1,0 +1,14 @@
+# Optional: speaker diarization (post-spec feature, local-only).
+# Install into the project venv:  ..\.venv\Scripts\pip install -r requirements-diarization.txt
+#
+# You also need a HuggingFace token (HUGGINGFACE_TOKEN in .env) and must
+# accept the licenses of BOTH models once:
+#   https://hf.co/pyannote/speaker-diarization-3.1
+#   https://hf.co/pyannote/segmentation-3.0
+#
+# Torch installs the CPU build by default on Windows, which is what native
+# Windows can use anyway (GPU needs WSL2/Docker). For a CUDA torch build see
+# https://pytorch.org/get-started/locally/ and run the worker under WSL2.
+
+pyannote.audio>=3.1
+torch>=2.1

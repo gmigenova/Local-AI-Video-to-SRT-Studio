@@ -13,7 +13,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import JSON, BigInteger, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -55,6 +55,11 @@ class VideoRender(Base):
     #: where the burned subtitles came from: "editor" (the job's current
     #: subtitle rows) or "external" (a user-supplied .srt file).
     source: Mapped[str] = mapped_column(String(20), default="editor")
+    #: how the subtitles are burned: plain "srt" (subtitles filter) or a
+    #: styled "ass" (ass filter; style lives in style_json)
+    subtitle_format: Mapped[str] = mapped_column(String(10), default="srt")
+    #: ASSStyle overrides for styled renders (font, size, colours, position)
+    style_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     progress: Mapped[float] = mapped_column(Float, default=0.0)
     current_stage: Mapped[str | None] = mapped_column(String(100))
     error_message: Mapped[str | None] = mapped_column(Text)

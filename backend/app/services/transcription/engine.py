@@ -123,6 +123,9 @@ class TranscriptionOptions:
     # Optional Silero VAD tuning (section 19 "Optimize VAD"); None = engine default
     vad_threshold: float | None = None
     vad_min_silence_ms: int | None = None
+    # Pipeline flag (NOT an engine kwarg): run pyannote speaker diarization
+    # after transcription and label the subtitle rows (post-spec feature).
+    diarize: bool = False
 
     def to_engine_kwargs(self) -> dict:
         """Keyword arguments passed to the concrete engine's transcribe().

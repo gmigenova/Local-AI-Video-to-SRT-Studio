@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle, Merge, Scissors, Trash2 } from 'lucide-react'
 
-import { Badge, Button } from '../../../components/ui'
+import { Badge, Button, inputClass } from '../../../components/ui'
 import type { SubtitleIssue } from '../quality'
 import { ISSUE_LABELS } from '../quality'
 import type { EditorSubtitle } from '../useSubtitleEditor'
@@ -18,9 +18,11 @@ export default function SubtitleRow({
   issues,
   isLast,
   search,
+  knownSpeakers,
   onSelect,
   onTextChange,
   onTimesChange,
+  onSpeakerChange,
   onSplit,
   onMerge,
   onDelete,
@@ -32,9 +34,11 @@ export default function SubtitleRow({
   issues: SubtitleIssue[]
   isLast: boolean
   search: string
+  knownSpeakers: string[]
   onSelect: () => void
   onTextChange: (text: string) => void
   onTimesChange: (start: number, end: number) => void
+  onSpeakerChange: (speaker: string | null) => void
   onSplit: () => void
   onMerge: () => void
   onDelete: () => void
@@ -89,6 +93,7 @@ export default function SubtitleRow({
             <span>{formatTimestamp(sub.start_ms)}</span>
             <span className="text-muted/50">→</span>
             <span>{formatTimestamp(sub.end_ms)}</span>
+            {sub.speaker ? <Badge tone="info">{sub.speaker}</Badge> : null}
             <span className="ml-auto flex items-center gap-1.5 font-sans">
               {sub.is_edited ? <Badge tone="info">edited</Badge> : null}
               {issues.length > 0 ? (
@@ -135,6 +140,27 @@ export default function SubtitleRow({
                 invalid={startInvalid}
                 onCommit={(ms) => onTimesChange(Math.min(sub.start_ms, ms - 1), ms)}
               />
+              {/* speaker picker (diarization rows); empty = no label */}
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-muted">
+                  Speaker
+                </span>
+                <select
+                  className={`${inputClass} w-32 px-2 py-1.5 text-xs`}
+                  value={sub.speaker ?? ''}
+                  onChange={(e) => onSpeakerChange(e.target.value || null)}
+                >
+                  <option value="">—</option>
+                  {knownSpeakers.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  {sub.speaker && !knownSpeakers.includes(sub.speaker) ? (
+                    <option value={sub.speaker}>{sub.speaker}</option>
+                  ) : null}
+                </select>
+              </label>
             </div>
 
             <div className="flex flex-wrap gap-1.5">

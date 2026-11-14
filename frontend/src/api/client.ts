@@ -2,6 +2,8 @@
 // Requests go through the Vite dev proxy (/api -> 127.0.0.1:8000).
 
 import type {
+  CleanupRequest,
+  CleanupResult,
   CreateJobRequest,
   Health,
   Job,
@@ -9,6 +11,7 @@ import type {
   MediaFile,
   AudioStream,
   Project,
+  RenderStyleOptions,
   Subtitle,
   SyncSubtitleItem,
   SystemInfo,
@@ -61,6 +64,10 @@ export function mediaStreamUrl(mediaId: string): string {
 
 export function exportUrl(jobId: string, format: string): string {
   return `${BASE}/jobs/${jobId}/export/${format}`
+}
+
+export function jobAudioUrl(jobId: string): string {
+  return `${BASE}/jobs/${jobId}/audio`
 }
 
 export function renderDownloadUrl(renderId: string): string {
@@ -160,11 +167,36 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  // LLM subtitle cleanup (local Ollama)
+  cleanupSubtitles: (jobId: string, payload: CleanupRequest) =>
+    request<CleanupResult>(`/jobs/${jobId}/subtitles/cleanup`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   // video render (subtitle burn-in)
-  startRender: (jobId: string, fontName?: string, srtFile?: File | null) => {
+  startRender: (
+    jobId: string,
+    options: {
+      fontName?: string
+      srtFile?: File | null
+      subtitleFormat?: 'srt' | 'ass'
+      style?: RenderStyleOptions
+    } = {},
+  ) => {
+    const { fontName, srtFile, subtitleFormat, style } = options
     const form = new FormData()
     if (fontName) form.append('font_name', fontName)
     if (srtFile) form.append('srt_file', srtFile)
+    if (subtitleFormat) form.append('subtitle_format', subtitleFormat)
+    if (style) {
+      if (style.font_name) form.append('font_name', style.font_name)
+      if (style.font_size != null) form.append('font_size', String(style.font_size))
+      if (style.primary_color) form.append('primary_color', style.primary_color)
+      if (style.outline != null) form.append('outline', String(style.outline))
+      if (style.margin_v != null) form.append('margin_v', String(style.margin_v))
+      if (style.position) form.append('position', style.position)
+    }
     return request<{
       render_id: string
       status: string

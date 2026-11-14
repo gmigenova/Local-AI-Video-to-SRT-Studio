@@ -3,7 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, ApiError, uploadMedia } from './client'
-import { ACTIVE_JOB_STATUSES, ACTIVE_RENDER_STATUSES, type CreateJobRequest } from '../types'
+import {
+  ACTIVE_JOB_STATUSES,
+  ACTIVE_RENDER_STATUSES,
+  type CreateJobRequest,
+  type RenderStyleOptions,
+} from '../types'
 
 export function useHealth() {
   return useQuery({
@@ -216,11 +221,15 @@ export function useStartRender() {
       jobId,
       fontName,
       srtFile,
+      subtitleFormat,
+      style,
     }: {
       jobId: string
       fontName?: string
       srtFile?: File | null
-    }) => api.startRender(jobId, fontName, srtFile),
+      subtitleFormat?: 'srt' | 'ass'
+      style?: RenderStyleOptions
+    }) => api.startRender(jobId, { fontName, srtFile, subtitleFormat, style }),
     onSuccess: (_data, variables) =>
       client.invalidateQueries({ queryKey: ['render', variables.jobId] }),
   })

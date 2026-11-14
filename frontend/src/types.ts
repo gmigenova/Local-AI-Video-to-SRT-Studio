@@ -22,6 +22,11 @@ export interface SystemInfo {
   ffmpeg_version: string | null
   models_available: { name: string; profile: string; installed: boolean }[]
   worker: { online: boolean; pid: number | null; busy_job_id: string | null }
+  diarization: {
+    available: boolean
+    reason: string | null
+    model: string
+  }
 }
 
 export interface Project {
@@ -114,6 +119,8 @@ export interface Subtitle {
   text: string
   original_text: string
   is_edited: boolean
+  /** Speaker label from diarization; null = unlabelled. */
+  speaker: string | null
   updated_at: string
 }
 
@@ -124,6 +131,7 @@ export interface SyncSubtitleItem {
   text: string
   original_text: string
   is_edited: boolean
+  speaker: string | null
 }
 
 // ---- Subtitle translation (Google Cloud Translation + Ollama TranslateGemma) ----
@@ -196,6 +204,30 @@ export interface TranslateResult {
   usage: TranslationUsage | null
 }
 
+// ---- LLM subtitle cleanup (local Ollama) ----
+
+export type CleanupMode = 'punctuation' | 'casing' | 'fillers' | 'fluency' | 'thai_polish'
+
+export interface CleanupRequest {
+  modes: CleanupMode[]
+  /** Override the configured model for this request. */
+  model?: string | null
+}
+
+export interface CleanedTextItem {
+  index: number
+  text: string
+}
+
+export interface CleanupResult {
+  job_id: string
+  model: string
+  modes: CleanupMode[]
+  cleaned: number
+  total: number
+  subtitles: CleanedTextItem[]
+}
+
 export type RenderStatus =
   | 'queued'
   | 'running'
@@ -215,6 +247,7 @@ export interface VideoRender {
   job_id: string
   status: RenderStatus
   source: 'editor' | 'external'
+  subtitle_format: 'srt' | 'ass'
   progress: number
   current_stage: string | null
   error_message: string | null
@@ -223,6 +256,17 @@ export interface VideoRender {
   created_at: string
   started_at: string | null
   completed_at: string | null
+}
+
+/** Style overrides for a styled (ASS) burn-in render. */
+export interface RenderStyleOptions {
+  font_name?: string
+  font_size?: number
+  /** RRGGBB hex; converted to ASS BGR server-side */
+  primary_color?: string
+  outline?: number
+  margin_v?: number
+  position?: 'bottom' | 'middle' | 'top'
 }
 
 export interface TranscriptionSettings {
@@ -235,6 +279,8 @@ export interface TranscriptionSettings {
   initial_prompt?: string | null
   vad_threshold?: number
   vad_min_silence_ms?: number
+  /** Run pyannote speaker diarization after transcription (post-spec). */
+  diarize?: boolean
   min_duration?: number
   max_duration?: number
   max_chars_per_line?: number

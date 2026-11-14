@@ -15,11 +15,15 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import urllib.error
 import urllib.request
 
 from app.core.config import Settings, get_settings
+from app.services.llm.batching import (
+    build_batches,
+    split_lines,
+    strip_enumeration_prefixes,
+)
 from app.services.translation.base import (
     FALLBACK_LANGUAGES,
     TranslationResult,
@@ -32,20 +36,12 @@ logger = logging.getLogger(__name__)
 _CHAT_PATH = "/api/chat"
 _TAGS_PATH = "/api/tags"
 
-#: Conservative per-request caps - LLM latency grows with batch size.
-_MAX_CUES_PER_REQUEST = 25
-_MAX_CHARS_PER_REQUEST = 3000
-
 #: Short probe timeout so a dead Ollama never stalls the languages endpoint.
 _TAGS_TIMEOUT_SECONDS = 2.5
 
 #: TranslateGemma uses BCP-47 script codes where the shared catalog uses
 #: Google-style region codes.
 _CODE_ALIASES = {"zh-CN": "zh-Hans", "zh-TW": "zh-Hant"}
-
-#: Model-added enumeration prefixes ("1. text", "2) text", "Line 3 - text")
-#: that sometimes appear in batch replies despite the prompt.
-_ENUMERATION = re.compile(r"^(?:line\s*)?(?P<n>\d+)[.):]?\s+", re.IGNORECASE)
 
 #: Official TranslateGemma prompt (ollama.com/library/translategemma), with
 #: TWO blank lines before the text.  ``batch_note`` adds a line-count
@@ -112,14 +108,14 @@ class OllamaTranslateClient:
         request_count = 0
         characters_sent = 0
 
-        for positions, batch in self._batches(texts):
+        for positions, batch in build_batches(texts):
             content = self._chat(self._build_prompt(batch, source_language, target_language))
             request_count += 1
             characters_sent += sum(len(cue) for cue in batch)
 
-            lines = self._split_lines(content)
+            lines = split_lines(content)
             if len(lines) == len(batch):
-                for slot, line in zip(positions, self._strip_line_numbers(lines), strict=True):
+                for slot, line in zip(positions, strip_enumeration_prefixes(lines), strict=True):
                     results[slot] = line
                 continue
 
@@ -184,67 +180,6 @@ class OllamaTranslateClient:
             batch_note=note,
             text=text,
         )
-
-    @staticmethod
-    def _split_lines(content: str) -> list[str]:
-        lines = [line.strip() for line in content.strip().split("\n")]
-        while lines and not lines[0]:
-            lines.pop(0)
-        while lines and not lines[-1]:
-            lines.pop()
-        return lines
-
-    @staticmethod
-    def _strip_line_numbers(lines: list[str]) -> list[str]:
-        """Drop model-added enumeration prefixes ("1. text", "2) text").
-
-        A prefix is removed only when its number matches the line's
-        position in the reply AND at least half the lines carry such a
-        matching number, so genuine text that happens to start with
-        digits (countdowns, amounts, lyric numbering) survives.
-        """
-        if len(lines) < 2:
-            return lines
-        matches = [_ENUMERATION.match(line) for line in lines]
-        aligned = [
-            match is not None and match.group("n") == str(position)
-            for position, match in enumerate(matches, start=1)
-        ]
-        if sum(aligned) * 2 < len(lines):
-            return lines
-        return [
-            line[match.end() :] if ok and match is not None else line
-            for line, match, ok in zip(lines, matches, aligned, strict=True)
-        ]
-
-    def _batches(
-        self, texts: list[str]
-    ) -> list[tuple[list[int], list[str]]]:
-        """Split non-empty cues into request-sized ``(positions, batch)`` pairs."""
-        batches: list[tuple[list[int], list[str]]] = []
-        positions: list[int] = []
-        batch: list[str] = []
-        chars = 0
-
-        def flush() -> None:
-            nonlocal positions, batch, chars
-            if batch:
-                batches.append((positions, batch))
-            positions, batch, chars = [], [], 0
-
-        for i, text in enumerate(texts):
-            stripped = " ".join(text.split())  # one line per cue
-            if not stripped:
-                continue  # empty cues pass through untranslated
-            if len(batch) >= _MAX_CUES_PER_REQUEST or (
-                chars + len(stripped) > _MAX_CHARS_PER_REQUEST and batch
-            ):
-                flush()
-            positions.append(i)
-            batch.append(stripped)
-            chars += len(stripped)
-        flush()
-        return batches
 
     def _chat(self, prompt: str) -> str:
         payload = self._request(

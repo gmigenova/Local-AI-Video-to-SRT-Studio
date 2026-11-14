@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.core.config import MODEL_CATALOG
+from app.core.config import MODEL_CATALOG, get_settings
 from app.database.base import get_db
 from app.models.job import JobStatus
 from app.repositories.jobs import JobsRepository
@@ -95,3 +96,21 @@ def retry_job(job_id: str, db: Session = Depends(get_db)) -> JobOut:
     retried = JobsRepository(db).retry(job_id)
     assert retried is not None
     return JobOut.model_validate(retried)
+
+
+@router.get("/jobs/{job_id}/audio")
+def get_job_audio(job_id: str, db: Session = Depends(get_db)) -> FileResponse:
+    """The job's extracted mono 16 kHz WAV - powers the editor waveform.
+
+    The file is a per-job artifact; retention may have removed it for old
+    jobs (RETENTION_AUDIO_DAYS), which surfaces as a clean 404 the client
+    treats as "no waveform".
+    """
+    _get_job_or_404(db, job_id)
+    audio_path = get_settings().storage_subdir("audio") / job_id / "extracted.wav"
+    if not audio_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="No extracted audio is available for this job.",
+        )
+    return FileResponse(audio_path, media_type="audio/wav")

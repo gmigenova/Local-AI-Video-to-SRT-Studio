@@ -1,6 +1,8 @@
 // Subtitle burn-in (hardsub) panel: re-encodes the original video with the
 // subtitles permanently rendered into the picture, then download.
 // Subtitle source: the current editor rows, or an external .srt file.
+// Style: plain (SRT + optional font) or styled (ASS: font, size, colour,
+// outline, vertical margin, position).
 
 import { useState } from 'react'
 import { Download, Film, X } from 'lucide-react'
@@ -44,7 +46,13 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
   const [useExternal, setUseExternal] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [cueCount, setCueCount] = useState<number | null>(null)
+  const [styled, setStyled] = useState(false)
   const [fontName, setFontName] = useState('')
+  const [fontSize, setFontSize] = useState('48')
+  const [fontColor, setFontColor] = useState('#ffffff')
+  const [outline, setOutline] = useState('2')
+  const [marginV, setMarginV] = useState('40')
+  const [position, setPosition] = useState<'bottom' | 'middle' | 'top'>('bottom')
   const [startError, setStartError] = useState<string | null>(null)
 
   const render = renderQuery.data
@@ -69,8 +77,20 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
     try {
       await startRender.mutateAsync({
         jobId,
-        fontName: fontName.trim() || undefined,
+        fontName: !styled && fontName.trim() ? fontName.trim() : undefined,
         srtFile: useExternal ? file : null,
+        subtitleFormat: styled && !useExternal ? 'ass' : 'srt',
+        style:
+          styled && !useExternal
+            ? {
+                font_name: fontName.trim() || undefined,
+                font_size: fontSize ? Number.parseInt(fontSize, 10) : undefined,
+                primary_color: fontColor.replace('#', ''),
+                outline: outline ? Number.parseFloat(outline) : undefined,
+                margin_v: marginV ? Number.parseInt(marginV, 10) : undefined,
+                position,
+              }
+            : undefined,
       })
     } catch (error) {
       setStartError(error instanceof Error ? error.message : 'Could not start the render.')
@@ -88,6 +108,7 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
           <div className="flex items-center justify-between text-xs text-muted">
             <span>
               {render.source === 'external' ? 'External SRT · ' : 'Editor subtitles · '}
+              {render.subtitle_format === 'ass' ? 'styled · ' : ''}
               {render.status === 'queued'
                 ? 'waiting in queue…'
                 : render.status === 'cancelling'
@@ -178,6 +199,33 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
             </div>
           ) : null}
 
+          {/* subtitle style selector (editor subtitles only) */}
+          <div
+            className="flex overflow-hidden rounded-lg border border-line text-xs"
+            title={useExternal ? 'External .srt files burn with their own text' : undefined}
+          >
+            <button
+              className={cn(
+                'px-2.5 py-1.5',
+                !styled ? 'bg-primary text-primary-foreground' : 'text-muted',
+              )}
+              onClick={() => setStyled(false)}
+              disabled={useExternal}
+            >
+              Simple (SRT)
+            </button>
+            <button
+              className={cn(
+                'px-2.5 py-1.5',
+                styled ? 'bg-primary text-primary-foreground' : 'text-muted',
+              )}
+              onClick={() => setStyled(true)}
+              disabled={useExternal}
+            >
+              Styled (ASS)
+            </button>
+          </div>
+
           <input
             className={`${inputClass} w-44`}
             list="burn-font-suggestions"
@@ -190,6 +238,67 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
               <option key={font} value={font} />
             ))}
           </datalist>
+
+          {styled && !useExternal ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              <label className="flex items-center gap-1">
+                Size
+                <input
+                  className={`${inputClass} w-16 px-2 py-1`}
+                  type="number"
+                  min={8}
+                  max={200}
+                  value={fontSize}
+                  onChange={(e) => setFontSize(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Colour
+                <input
+                  className="h-7 w-9 cursor-pointer rounded border border-line bg-transparent"
+                  type="color"
+                  value={fontColor}
+                  onChange={(e) => setFontColor(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Outline
+                <input
+                  className={`${inputClass} w-14 px-2 py-1`}
+                  type="number"
+                  min={0}
+                  max={6}
+                  step={0.5}
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Margin
+                <input
+                  className={`${inputClass} w-16 px-2 py-1`}
+                  type="number"
+                  min={0}
+                  max={400}
+                  value={marginV}
+                  onChange={(e) => setMarginV(e.target.value)}
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Position
+                <select
+                  className={`${inputClass} px-2 py-1`}
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value as 'bottom' | 'middle' | 'top')}
+                >
+                  <option value="bottom">Bottom</option>
+                  <option value="middle">Middle</option>
+                  <option value="top">Top</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
           <Button onClick={() => void handleStart()} disabled={startRender.isPending || !canStart}>
             {startRender.isPending ? <Spinner className="h-3.5 w-3.5" /> : <Film size={15} />}
             {render ? 'Try again' : 'Render video'}

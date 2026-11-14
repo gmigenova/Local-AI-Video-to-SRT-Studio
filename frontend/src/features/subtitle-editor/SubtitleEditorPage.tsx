@@ -23,10 +23,12 @@ import {
   Search,
   Type,
   Undo2,
+  Users,
+  Wand2,
   X,
 } from 'lucide-react'
 
-import { exportUrl } from '../../api/client'
+import { exportUrl, jobAudioUrl } from '../../api/client'
 import { useJob, useMediaItem, useSubtitles } from '../../api/hooks'
 import { api } from '../../api/client'
 import {
@@ -40,10 +42,12 @@ import {
   cn,
 } from '../../components/ui'
 import BurnInVideo from './components/BurnInVideo'
+import CleanupDialog from './components/CleanupDialog'
 import EditorVideoPlayer from './components/EditorVideoPlayer'
 import Timeline from './components/Timeline'
 import SubtitleRow from './components/SubtitleRow'
 import SearchReplace from './components/SearchReplace'
+import SpeakerRenameDialog from './components/SpeakerRenameDialog'
 import TranslateDialog from './components/TranslateDialog'
 import { checkSubtitles, ISSUE_LABELS } from './quality'
 import { useSubtitleEditor } from './useSubtitleEditor'
@@ -67,6 +71,8 @@ export default function SubtitleEditorPage() {
   const [showWarnings, setShowWarnings] = useState(false)
   const [showRender, setShowRender] = useState(false)
   const [showTranslate, setShowTranslate] = useState(false)
+  const [showCleanup, setShowCleanup] = useState(false)
+  const [showSpeakerRename, setShowSpeakerRename] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [reprocessing, setReprocessing] = useState(false)
@@ -149,6 +155,15 @@ export default function SubtitleEditorPage() {
   const activeKey =
     editor.subs.find((s) => currentMs >= s.start_ms && currentMs < s.end_ms)?.key ?? null
   const selectedIndex = editor.subs.findIndex((s) => s.key === selectedKey)
+  const speakerCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const sub of editor.subs) {
+      if (sub.speaker) counts[sub.speaker] = (counts[sub.speaker] ?? 0) + 1
+    }
+    return counts
+  }, [editor.subs])
+  const knownSpeakers = useMemo(() => Object.keys(speakerCounts).sort(), [speakerCounts])
+  const hasSpeakers = knownSpeakers.length > 0
 
   const seek = useCallback((ms: number) => {
     const video = videoRef.current
@@ -325,6 +340,34 @@ export default function SubtitleEditorPage() {
             >
               JSON data
             </DropdownItem>
+            <DropdownItem
+              icon={<Captions size={15} />}
+              hint=".ass"
+              href={exportUrl(jobId!, 'ass')}
+              download
+            >
+              ASS subtitles (styled)
+            </DropdownItem>
+            {hasSpeakers ? (
+              <>
+                <DropdownItem
+                  icon={<Users size={15} />}
+                  hint=".srt"
+                  href={`${exportUrl(jobId!, 'srt')}?speakers=true`}
+                  download
+                >
+                  SubRip with speaker names
+                </DropdownItem>
+                <DropdownItem
+                  icon={<Users size={15} />}
+                  hint=".txt"
+                  href={`${exportUrl(jobId!, 'txt')}?speakers=true`}
+                  download
+                >
+                  Plain text with speaker names
+                </DropdownItem>
+              </>
+            ) : null}
           </DropdownMenu>
           <Button
             variant="secondary"
@@ -375,6 +418,15 @@ export default function SubtitleEditorPage() {
           >
             <Plus size={15} /> Add
           </Button>
+          {hasSpeakers ? (
+            <Button
+              variant="secondary"
+              title="Rename the diarization speakers (e.g. SPEAKER_00 → Host)"
+              onClick={() => setShowSpeakerRename(true)}
+            >
+              <Users size={15} /> Speakers
+            </Button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -399,6 +451,17 @@ export default function SubtitleEditorPage() {
             disabled={editor.subs.length === 0}
           >
             <Languages size={15} /> Translate
+          </Button>
+          <Button
+            variant="secondary"
+            title="AI cleanup — punctuation, casing, fillers, Thai polish via local Ollama"
+            onClick={() => {
+              setNotice(null)
+              setShowCleanup(true)
+            }}
+            disabled={editor.subs.length === 0}
+          >
+            <Wand2 size={15} /> AI cleanup
           </Button>
           <Button
             variant="secondary"
@@ -514,6 +577,39 @@ export default function SubtitleEditorPage() {
         />
       ) : null}
 
+      {showCleanup ? (
+        <CleanupDialog
+          jobId={jobId!}
+          subtitleCount={editor.subs.length}
+          onBeforeCleanup={editor.save}
+          onApply={(result) => {
+            const changed = editor.applyCleanup(result.subtitles)
+            setNotice(
+              `Cleaned ${result.cleaned} of ${result.total} subtitles · via Ollama (${result.model})` +
+                (changed === 0 ? ' — no visible changes.' : '. Undo with Ctrl+Z.'),
+            )
+            setShowCleanup(false)
+          }}
+          onClose={() => setShowCleanup(false)}
+        />
+      ) : null}
+
+      {showSpeakerRename ? (
+        <SpeakerRenameDialog
+          speakers={knownSpeakers}
+          counts={speakerCounts}
+          onApply={(map) => {
+            const changed = editor.applySpeakerRename(map)
+            setNotice(
+              changed > 0
+                ? `Renamed speakers on ${changed} subtitles. Undo with Ctrl+Z.`
+                : 'No speaker changes to apply.',
+            )
+          }}
+          onClose={() => setShowSpeakerRename(false)}
+        />
+      ) : null}
+
       {showRender ? (
         <BurnInVideo
           jobId={jobId!}
@@ -542,6 +638,7 @@ export default function SubtitleEditorPage() {
             subtitles={editor.subs}
             activeKey={activeKey}
             selectedKey={selectedKey}
+            audioUrl={jobId ? jobAudioUrl(jobId) : null}
             onSeek={seek}
             onSelect={(key) => {
               // clicking a timeline block: select the row and bring it into
@@ -655,6 +752,8 @@ export default function SubtitleEditorPage() {
                   onSelect={() => selectRow(sub.key, sub.start_ms)}
                   onTextChange={(text) => editor.setText(sub.key, text)}
                   onTimesChange={(start, end) => editor.setTimes(sub.key, start, end)}
+                  knownSpeakers={knownSpeakers}
+                  onSpeakerChange={(speaker) => editor.setSpeaker(sub.key, speaker)}
                   onSplit={() => {
                     const key = editor.splitAtPlayhead(sub.key, currentMs)
                     if (key) setSelectedKey(key)

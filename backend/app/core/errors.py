@@ -50,3 +50,12 @@ class ExportError(VideoToSrtError):
 
 class TranslationError(VideoToSrtError):
     """Subtitle translation failed (bad config, API error, network)."""
+
+
+class DiarizationError(VideoToSrtError):
+    """Speaker diarization failed after it was properly enabled."""
+
+
+class DiarizationUnavailable(VideoToSrtError):
+    """Speaker diarization is requested but not configured (missing token
+    or the optional pyannote dependency)."""

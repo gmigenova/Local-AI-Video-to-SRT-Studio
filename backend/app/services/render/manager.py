@@ -25,8 +25,8 @@ from app.database.base import get_session_factory
 from app.models.render import RenderStatus
 from app.repositories.renders import RendersRepository
 from app.repositories.subtitles import SubtitlesRepository
-from app.services.render.burner import RENDER_SRT_NAME, SubtitleBurner
-from app.services.subtitle import Subtitle, export_subtitles
+from app.services.render.burner import RENDER_ASS_NAME, RENDER_SRT_NAME, SubtitleBurner
+from app.services.subtitle import ASSStyle, Subtitle, export_subtitles
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +129,16 @@ class RenderManager:
             media = job.media
 
             render_dir = self.settings.storage_subdir("renders") / render_id
-            srt_path = render_dir / RENDER_SRT_NAME
+            subtitle_format = render.subtitle_format or "srt"
+            subtitle_path = (
+                render_dir / RENDER_ASS_NAME if subtitle_format == "ass" else render_dir / RENDER_SRT_NAME
+            )
             output_path = render_dir / "output.mp4"
             render_dir.mkdir(parents=True, exist_ok=True)
 
-            if render.source == "external" and srt_path.is_file():
+            if render.source == "external" and subtitle_path.is_file():
                 # an uploaded SRT was validated + staged at creation time
-                logger.info("Render %s uses an external SRT.", render_id)
+                logger.info("Render %s uses an external subtitle file.", render_id)
             else:
                 rows = SubtitlesRepository(db).list_for_job(render.job_id)
                 if not rows:
@@ -148,6 +151,16 @@ class RenderManager:
                     )
                     return
                 try:
+                    style: ASSStyle | None = None
+                    if subtitle_format == "ass":
+                        # PlayRes matches the video so font sizes scale 1:1
+                        style = ASSStyle(
+                            **{
+                                **(render.style_json or {}),
+                                "play_res_x": media.width or 1920,
+                                "play_res_y": media.height or 1080,
+                            }  # type: ignore[arg-type]
+                        )
                     export_subtitles(
                         [
                             Subtitle(
@@ -160,8 +173,9 @@ class RenderManager:
                             )
                             for r in rows
                         ],
-                        srt_path,
-                        "srt",
+                        subtitle_path,
+                        subtitle_format,
+                        style=style,
                     )
                 except VideoToSrtError as exc:
                     repo.update_status(
@@ -191,10 +205,11 @@ class RenderManager:
             try:
                 result = self._burner.burn(
                     media.file_path,
-                    srt_path,
+                    subtitle_path,
                     output_path,
                     duration_ms=media.duration_ms,
                     font_name=render.font_name,
+                    subtitle_format=subtitle_format,
                     audio_codec=media.audio_codec,
                     cancel_event=cancel_event,
                     on_progress=on_progress,

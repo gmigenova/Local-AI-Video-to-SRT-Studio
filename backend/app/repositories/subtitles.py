@@ -94,6 +94,7 @@ class SubtitlesRepository:
                 text=sub.text,
                 original_text=sub.original_text,
                 is_edited=sub.is_edited,
+                speaker=sub.speaker,
             )
             for sub in subtitles
         ]

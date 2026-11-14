@@ -12,6 +12,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,23 @@ class Settings(BaseSettings):
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_translate_model: str = "translategemma:12b"
     ollama_timeout_seconds: float = 300.0
+
+    # Ollama (local LLM subtitle cleanup: punctuation, casing, fillers, Thai polish)
+    #: pick a Thai-capable instruct model, e.g. qwen2.5:7b or llama3.1:8b
+    ollama_cleanup_model: str = "qwen2.5:7b"
+
+    # Speaker diarization (pyannote.audio; post-spec feature, local-only).
+    #: master switch - the checkbox in the UI only appears when enabled
+    diarize_enabled: bool = False
+    #: HuggingFace token with accepted pyannote model licenses
+    #: (hf.co/pyannote/speaker-diarization-3.1 + .../segmentation-3.0).
+    #: PYANNOTE_TOKEN is accepted as an alias.
+    huggingface_token: str = Field(
+        default="", validation_alias=AliasChoices("HUGGINGFACE_TOKEN", "PYANNOTE_TOKEN")
+    )
+    diarize_model: str = "pyannote/speaker-diarization-3.1"
+    #: native Windows runs CPU-only (same caveat as CTranslate2 CUDA builds)
+    diarize_device: str = "cpu"
 
     # Retention / automatic cleanup (days; 0 disables the rule)
     retention_temp_days: int = 7

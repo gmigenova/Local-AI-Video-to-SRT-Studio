@@ -36,9 +36,10 @@ logger = logging.getLogger(__name__)
 #: Anything else (opus, vorbis, pcm_*, ...) is transcoded to AAC.
 MP4_AUDIO_CODECS: frozenset[str] = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
 
-#: name of the SRT written next to the output; referenced bare by the
-#: filter (see module docstring) so it must stay filter-safe.
+#: names of the subtitle files written next to the output; referenced bare
+#: by the filter (see module docstring) so they must stay filter-safe.
 RENDER_SRT_NAME = "render.srt"
+RENDER_ASS_NAME = "render.ass"
 
 DEFAULT_CRF = 21
 DEFAULT_PRESET = "veryfast"
@@ -64,25 +65,37 @@ def build_burn_args(
     output_path: Path | str,
     *,
     font_name: str | None = None,
+    subtitle_format: str = "srt",
     crf: int = DEFAULT_CRF,
     preset: str = DEFAULT_PRESET,
     audio_codec: str | None = None,
 ) -> list[str]:
     """Build the FFmpeg argument array for a hardsub render.
 
-    The SRT is referenced by file name only - the caller must run FFmpeg
-    with ``cwd`` set to ``srt_path.parent`` (see :class:`SubtitleBurner`).
+    The subtitle file is referenced by bare name only - the caller must run
+    FFmpeg with ``cwd`` set to ``srt_path.parent`` (see
+    :class:`SubtitleBurner`). ``subtitle_format`` picks the filter: plain
+    SRT via ``subtitles`` (with optional ``force_style`` font) or a styled
+    ASS via ``ass`` (the style lives in the file's header).
     """
     srt_path = Path(srt_path)
-    if srt_path.name != RENDER_SRT_NAME:
+    allowed = (RENDER_SRT_NAME, RENDER_ASS_NAME)
+    if srt_path.name not in allowed:
         raise ValueError(
-            f"The burn filter only supports the fixed name '{RENDER_SRT_NAME}'."
+            f"The burn filter only supports the fixed names {allowed}."
         )
 
-    filter_value = f"subtitles={srt_path.name}"
-    if font_name:
-        # single quotes protect the space + '=' inside the filtergraph value
-        filter_value += f":force_style='FontName={sanitize_font_name(font_name)}'"
+    if subtitle_format == "ass":
+        if srt_path.name != RENDER_ASS_NAME:
+            raise ValueError(f"ASS renders must reference '{RENDER_ASS_NAME}'.")
+        filter_value = f"ass={RENDER_ASS_NAME}"
+    else:
+        if srt_path.name != RENDER_SRT_NAME:
+            raise ValueError(f"Plain renders must reference '{RENDER_SRT_NAME}'.")
+        filter_value = f"subtitles={RENDER_SRT_NAME}"
+        if font_name:
+            # single quotes protect the space + '=' inside the filtergraph value
+            filter_value += f":force_style='FontName={sanitize_font_name(font_name)}'"
 
     copy_audio = audio_codec is not None and audio_codec.lower() in MP4_AUDIO_CODECS
     audio_args = ["-c:a", "copy"] if copy_audio else ["-c:a", "aac", "-b:a", "192k"]
@@ -140,11 +153,16 @@ class SubtitleBurner:
         *,
         duration_ms: int | None = None,
         font_name: str | None = None,
+        subtitle_format: str = "srt",
         audio_codec: str | None = None,
         cancel_event: threading.Event | None = None,
         on_progress: Callable[[float], None] | None = None,
     ) -> BurnResult:
         """Render ``srt_path`` over ``video_path`` into ``output_path``.
+
+        ``subtitle_format`` selects the burn filter ("srt" -> ``subtitles``
+        with an optional ``force_style`` font, "ass" -> ``ass`` with the
+        style baked into the file header).
 
         ``on_progress`` receives a 0..1 fraction derived from FFmpeg's
         reported output time vs. ``duration_ms`` - it is only called when
@@ -172,6 +190,7 @@ class SubtitleBurner:
             srt_path,
             output_path,
             font_name=font_name,
+            subtitle_format=subtitle_format,
             audio_codec=audio_codec,
         )
         logger.info(

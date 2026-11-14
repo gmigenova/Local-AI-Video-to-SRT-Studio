@@ -32,6 +32,8 @@ class SubtitleModel(Base):
     text: Mapped[str] = mapped_column(Text)
     original_text: Mapped[str] = mapped_column(Text)
     is_edited: Mapped[bool] = mapped_column(Boolean, default=False)
+    #: speaker label from diarization (post-spec); NULL = unlabelled
+    speaker: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow
     )

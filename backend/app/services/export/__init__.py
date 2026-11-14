@@ -11,7 +11,12 @@ from app.core.errors import ExportError
 from app.models.job import TranscriptionJob
 from app.repositories.jobs import JobsRepository
 from app.repositories.subtitles import SubtitlesRepository
-from app.services.subtitle import Subtitle, export_subtitles, supported_formats
+from app.services.subtitle import (
+    ASSStyle,
+    Subtitle,
+    export_subtitles,
+    supported_formats,
+)
 
 
 class ExportJobError(Exception):
@@ -29,10 +34,14 @@ def export_job_subtitles(
     fmt: str,
     utf8_bom: bool = False,
     settings: Settings | None = None,
+    style: ASSStyle | None = None,
+    prefix_speakers: bool = False,
 ) -> tuple[Path, str, str]:
     """Export a job's current subtitles.
 
-    Returns ``(file_path, download_name, media_type)``.
+    Returns ``(file_path, download_name, media_type)``. ``style`` only
+    applies to the ASS format (styled export); ``prefix_speakers`` prepends
+    ``[Speaker]`` to labelled cues in plain-text formats.
     """
     if fmt.lower() not in supported_formats():
         raise ExportJobError(400, f"Unsupported format '{fmt}'.")
@@ -52,13 +61,17 @@ def export_job_subtitles(
             text=row.text,
             original_text=row.original_text,
             is_edited=row.is_edited,
+            speaker=row.speaker,
         )
         for row in rows
     ]
     out_dir = cfg.storage_subdir("subtitles") / job_id
     path = out_dir / f"output.{fmt.lower()}"
     try:
-        export_subtitles(subtitles, path, fmt.lower(), utf8_bom=utf8_bom)
+        export_subtitles(
+            subtitles, path, fmt.lower(), utf8_bom=utf8_bom, style=style,
+            prefix_speakers=prefix_speakers,
+        )
     except ExportError as exc:
         raise ExportJobError(500, str(exc)) from exc
 
@@ -68,6 +81,7 @@ def export_job_subtitles(
         "vtt": "text/vtt",
         "txt": "text/plain",
         "json": "application/json",
+        "ass": "text/x-ssa",
     }
     return path, download_name, media_types[fmt.lower()]
 

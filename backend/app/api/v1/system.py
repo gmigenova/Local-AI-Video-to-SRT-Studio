@@ -10,6 +10,7 @@ import subprocess
 from fastapi import APIRouter
 
 from app.core.config import MODEL_CATALOG, get_settings
+from app.services.diarization import DiarizationService
 from app.services.transcription.model_manager import ModelManager
 from app.workers.heartbeat import is_worker_online, read_heartbeat
 
@@ -76,6 +77,7 @@ def system_info() -> dict:
     settings = get_settings()
     gpu = ModelManager.gpu_summary()
     beat = read_heartbeat() or {}
+    diarization_available, diarization_reason = DiarizationService.is_available(settings)
     return {
         "app_name": settings.app_name,
         "app_env": settings.app_env,
@@ -98,5 +100,10 @@ def system_info() -> dict:
             "online": is_worker_online(),
             "pid": beat.get("pid"),
             "busy_job_id": beat.get("busy_job_id"),
+        },
+        "diarization": {
+            "available": diarization_available,
+            "reason": diarization_reason,
+            "model": settings.diarize_model,
         },
     }

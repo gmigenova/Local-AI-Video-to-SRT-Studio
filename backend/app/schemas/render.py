@@ -21,6 +21,7 @@ class RenderOut(BaseModel):
     job_id: str
     status: str
     source: str
+    subtitle_format: str = "srt"
     progress: float
     current_stage: str | None
     error_message: str | None

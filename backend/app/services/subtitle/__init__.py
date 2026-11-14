@@ -1,6 +1,8 @@
 """Subtitle processing: normalization, segmentation, rules and export."""
 
 from app.services.subtitle.exporters import (
+    ASSExporter,
+    ASSStyle,
     SRTExporter,
     TXTExporter,
     VTTExporter,
@@ -8,6 +10,7 @@ from app.services.subtitle.exporters import (
     format_timestamp_srt,
     format_timestamp_vtt,
     get_exporter,
+    rgb_to_ass_color,
     supported_formats,
 )
 from app.services.subtitle.models import Subtitle, SubtitleWarning
@@ -18,6 +21,8 @@ from app.services.subtitle.processor import (
 )
 
 __all__ = [
+    "ASSExporter",
+    "ASSStyle",
     "SRTExporter",
     "TXTExporter",
     "VTTExporter",
@@ -30,5 +35,6 @@ __all__ = [
     "format_timestamp_srt",
     "format_timestamp_vtt",
     "get_exporter",
+    "rgb_to_ass_color",
     "supported_formats",
 ]

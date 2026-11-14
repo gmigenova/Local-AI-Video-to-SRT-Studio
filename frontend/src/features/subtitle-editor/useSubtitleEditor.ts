@@ -15,6 +15,7 @@ export interface EditorSubtitle {
   text: string
   original_text: string
   is_edited: boolean
+  speaker: string | null
 }
 
 const HISTORY_LIMIT = 200
@@ -29,6 +30,7 @@ function fromApi(subs: Subtitle[]): EditorSubtitle[] {
     text: s.text,
     original_text: s.original_text,
     is_edited: s.is_edited,
+    speaker: s.speaker,
   }))
 }
 
@@ -168,6 +170,7 @@ export function useSubtitleEditor(jobId: string | undefined) {
         text: '',
         original_text: '',
         is_edited: false,
+        speaker: prev ? prev.speaker : null, // inherit from the neighbour row
       }
       const next = [...current.slice(0, insertAt), fresh, ...current.slice(insertAt)]
       commit(next)
@@ -227,6 +230,7 @@ export function useSubtitleEditor(jobId: string | undefined) {
         text: [a.text.trim(), b.text.trim()].filter(Boolean).join(' '),
         original_text: a.original_text,
         is_edited: true,
+        speaker: a.speaker ?? b.speaker, // keep whichever row had a label
       }
       const next = [...current.slice(0, index), merged, ...current.slice(index + 2)]
       commit(next)
@@ -251,24 +255,71 @@ export function useSubtitleEditor(jobId: string | undefined) {
     [commit],
   )
 
-  /** Apply translation results (1-based indexes aligned to the saved list).
-   *
-   * 'replace' swaps the cue text for the translation; 'dual' appends the
-   * translation on a new line below the original (bilingual subtitles).
-   * Applied as ONE undo step; auto-save persists it like any other edit.
-   */
-  const applyTranslation = useCallback(
-    (items: TranslatedTextItem[], mode: TranslateMode): number => {
+  /** Apply server-computed texts (1-based indexes aligned to the saved list)
+   * to the working copy as ONE undo step; auto-save persists them like any
+   * other edit. `combine` decides how the incoming text lands (replace, or
+   * append below the original for bilingual subtitles). */
+  const applyTextsByIndex = useCallback(
+    (
+      items: { index: number; text: string }[],
+      combine: (current: string, incoming: string) => string,
+    ): number => {
       let changed = 0
       const byIndex = new Map(items.map((item) => [item.index, item.text]))
       const next = subsRef.current.map((s, i) => {
-        const translated = byIndex.get(i + 1)
-        if (translated === undefined || !translated) return s
-        const text =
-          mode === 'dual' && s.text.trim() ? `${s.text.trimEnd()}\n${translated}` : translated
+        const incoming = byIndex.get(i + 1)
+        if (incoming === undefined || !incoming) return s
+        const text = combine(s.text, incoming)
         if (text === s.text) return s
         changed += 1
         return { ...s, text, is_edited: true }
+      })
+      if (changed > 0) commit(next)
+      return changed
+    },
+    [commit],
+  )
+
+  /** Apply translation results: 'replace' swaps the cue text for the
+   * translation; 'dual' appends it on a new line below the original
+   * (bilingual subtitles). */
+  const applyTranslation = useCallback(
+    (items: TranslatedTextItem[], mode: TranslateMode): number =>
+      applyTextsByIndex(items, (current, incoming) =>
+        mode === 'dual' && current.trim() ? `${current.trimEnd()}\n${incoming}` : incoming,
+      ),
+    [applyTextsByIndex],
+  )
+
+  /** Apply AI cleanup results: the cleaned text replaces the cue text.
+   * Timestamps are never part of this. */
+  const applyCleanup = useCallback(
+    (items: { index: number; text: string }[]): number =>
+      applyTextsByIndex(items, (_current, incoming) => incoming),
+    [applyTextsByIndex],
+  )
+
+  /** Set one row's speaker label (coalesced like typing). */
+  const setSpeaker = useCallback(
+    (key: string, speaker: string | null) => {
+      const trimmed = speaker?.trim() || null
+      const next = subsRef.current.map((s) => (s.key === key ? { ...s, speaker: trimmed } : s))
+      commit(next, { key, field: 'speaker' })
+    },
+    [commit],
+  )
+
+  /** Rename speakers across all rows as ONE undo step, e.g. rename
+   * SPEAKER_00 -> "Host". Values map old -> new; empty means clear. */
+  const applySpeakerRename = useCallback(
+    (map: Record<string, string>): number => {
+      let changed = 0
+      const next = subsRef.current.map((s) => {
+        if (s.speaker === null || !(s.speaker in map)) return s
+        const renamed = map[s.speaker]?.trim() || null
+        if (renamed === s.speaker) return s
+        changed += 1
+        return { ...s, speaker: renamed }
       })
       if (changed > 0) commit(next)
       return changed
@@ -290,6 +341,7 @@ export function useSubtitleEditor(jobId: string | undefined) {
         text: s.text,
         original_text: s.original_text,
         is_edited: s.is_edited,
+        speaker: s.speaker,
       }))
       await api.syncSubtitles(jobId, payload)
       setSavedJson(JSON.stringify(subsRef.current))
@@ -333,5 +385,8 @@ export function useSubtitleEditor(jobId: string | undefined) {
     mergeWithNext,
     replaceAllText,
     applyTranslation,
+    applyCleanup,
+    setSpeaker,
+    applySpeakerRename,
   }
 }

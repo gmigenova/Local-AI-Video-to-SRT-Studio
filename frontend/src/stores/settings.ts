@@ -22,6 +22,7 @@ export interface ResolvedSettings {
     initial_prompt: string | null
     vad_threshold?: number
     vad_min_silence_ms?: number
+    diarize?: boolean
   }
 }
 
@@ -36,6 +37,7 @@ interface SettingsState {
   initialPrompt: string
   vadThreshold: string
   vadMinSilenceMs: string
+  diarize: boolean
   setQuality: (quality: QualityPreset) => void
   patch: (update: Partial<Omit<SettingsState, 'patch' | 'setQuality' | 'resolved'>>) => void
   resolved: () => ResolvedSettings
@@ -68,6 +70,7 @@ function persist(state: SettingsState): void {
         initialPrompt: state.initialPrompt,
         vadThreshold: state.vadThreshold,
         vadMinSilenceMs: state.vadMinSilenceMs,
+        diarize: state.diarize,
       }),
     )
   } catch {
@@ -86,6 +89,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   initialPrompt: stored.initialPrompt ?? '',
   vadThreshold: stored.vadThreshold ?? '',
   vadMinSilenceMs: stored.vadMinSilenceMs ?? '',
+  diarize: stored.diarize ?? false,
 
   setQuality: (quality) => {
     const preset = PRESETS[quality]
@@ -113,6 +117,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         initial_prompt: s.initialPrompt.trim() ? s.initialPrompt.trim() : null,
         ...(Number.isFinite(vadThreshold) ? { vad_threshold: vadThreshold } : {}),
         ...(Number.isFinite(vadMinSilenceMs) ? { vad_min_silence_ms: vadMinSilenceMs } : {}),
+        ...(s.diarize ? { diarize: true } : {}),
       },
     }
   },

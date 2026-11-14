@@ -1,22 +1,35 @@
-"""Subtitle endpoints: list, update, bulk-update, reprocess, export, import."""
+"""Subtitle endpoints: list, update, bulk-update, reprocess, cleanup, export, import."""
 
 from __future__ import annotations
+
+import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.errors import ExportError
 from app.database.base import get_db
 from app.repositories.jobs import JobsRepository
 from app.repositories.subtitles import SubtitlesRepository
+from app.schemas.cleanup import (
+    CleanedTextItem,
+    CleanupSubtitlesRequest,
+    CleanupSubtitlesResponse,
+)
 from app.schemas.subtitle import (
     BulkSubtitleUpdate,
     SubtitleOut,
     SubtitleSyncRequest,
     SubtitleUpdate,
 )
+from app.services.diarization import (
+    assign_speakers_to_subtitles,
+    read_diarization_payload,
+)
 from app.services.export import ExportJobError, export_job_subtitles
+from app.services.llm import CleanupServiceError, make_ollama_cleaner
 from app.services.render import (
     MAX_SRT_BYTES,
     SrtImportError,
@@ -24,15 +37,19 @@ from app.services.render import (
     parse_srt,
 )
 from app.services.subtitle import (
+    ASSStyle,
     Subtitle,
     SubtitleProcessor,
     SubtitleRules,
     export_subtitles,
+    rgb_to_ass_color,
 )
 from app.services.transcription.engine import make_segments_from_payload
 from app.workers.worker import _RULE_KEYS
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 def _get_job_or_404(db: Session, job_id: str):
@@ -134,6 +151,7 @@ def sync_subtitles(
                 text=item.text,
                 original_text=item.original_text or item.text,
                 is_edited=item.is_edited,
+                speaker=item.speaker,
             )
             for i, item in enumerate(payload.subtitles, start=1)
         ],
@@ -152,6 +170,7 @@ def sync_subtitles(
                 text=r.text,
                 original_text=r.original_text,
                 is_edited=r.is_edited,
+                speaker=r.speaker,
             )
             for r in rows
         ],
@@ -184,6 +203,17 @@ def reprocess_subtitles(job_id: str, db: Session = Depends(get_db)) -> dict:
     rules = SubtitleRules(**rules_kwargs) if rules_kwargs else None
     result = SubtitleProcessor(rules).process(rebuilt)
 
+    # re-apply speakers from the persisted diarization (transcripts are kept
+    # forever), so reprocess does not silently drop the speaker labels
+    turns = read_diarization_payload(
+        get_settings().storage_subdir("transcripts") / job_id / "diarization.json"
+    )
+    labelled = 0
+    if turns:
+        labelled = assign_speakers_to_subtitles(result.subtitles, turns).apply_to(
+            result.subtitles
+        )
+
     repo = SubtitlesRepository(db)
     repo.replace_for_job(job_id, result.subtitles)
     db.commit()
@@ -196,7 +226,54 @@ def reprocess_subtitles(job_id: str, db: Session = Depends(get_db)) -> dict:
         "job_id": job_id,
         "subtitles": len(result.subtitles),
         "warnings": len(result.warnings),
+        "speakers": labelled,
     }
+
+
+@router.post(
+    "/jobs/{job_id}/subtitles/cleanup", response_model=CleanupSubtitlesResponse
+)
+def cleanup_job_subtitles(
+    job_id: str,
+    payload: CleanupSubtitlesRequest,
+    db: Session = Depends(get_db),
+) -> CleanupSubtitlesResponse:
+    """Proofread the job's saved subtitle texts with a local Ollama model.
+
+    Like the translate endpoint, this never persists anything: the cleaned
+    texts are returned raw (aligned by 1-based index) and the editor applies
+    them client-side as one undo step, letting auto-save persist them.
+    Timestamps are never touched.
+    """
+    _get_job_or_404(db, job_id)
+    rows = SubtitlesRepository(db).list_for_job(job_id)
+    if not rows:
+        raise HTTPException(status_code=409, detail="This job has no subtitles to clean up.")
+
+    cleaner = make_ollama_cleaner(get_settings(), model=payload.model)
+    try:
+        result = cleaner.cleanup(texts=[row.text for row in rows], modes=payload.modes)
+    except CleanupServiceError as exc:
+        logger.warning(
+            "Ollama cleanup failed for job %s (%s): %s",
+            job_id,
+            ",".join(payload.modes),
+            exc.message,
+        )
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+    cleaned = sum(1 for i, text in enumerate(result.texts) if text and text != rows[i].text)
+    return CleanupSubtitlesResponse(
+        job_id=job_id,
+        model=cleaner.model_name,
+        modes=payload.modes,
+        cleaned=cleaned,
+        total=len(rows),
+        subtitles=[
+            CleanedTextItem(index=i, text=text)
+            for i, text in enumerate(result.texts, start=1)
+        ],
+    )
 
 
 @router.post("/jobs/{job_id}/subtitles/import")
@@ -265,12 +342,52 @@ def export_subtitle_file(
     job_id: str,
     fmt: str,
     bom: bool = False,
+    # prepend "[Speaker]" to labelled cues (srt/vtt/txt; needs diarization)
+    speakers: bool = False,
+    # ASS-only style overrides (ignored for other formats)
+    font_name: str | None = None,
+    font_size: int | None = None,
+    primary_color: str | None = None,
+    outline: float | None = None,
+    margin_v: int | None = None,
+    alignment: int | None = None,
     db: Session = Depends(get_db),
 ) -> FileResponse:
+    style: ASSStyle | None = None
+    if fmt.lower() == "ass":
+        overrides: dict[str, object] = {}
+        if font_name:
+            overrides["font_name"] = font_name
+        if font_size is not None:
+            overrides["font_size"] = _clamp(font_size, 8, 200)
+        if primary_color is not None:
+            try:
+                overrides["primary_color"] = rgb_to_ass_color(primary_color)
+            except ExportError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if outline is not None:
+            overrides["outline"] = _clamp_float(outline, 0, 6)
+        if margin_v is not None:
+            overrides["margin_v"] = _clamp(margin_v, 0, 400)
+        if alignment is not None:
+            overrides["alignment"] = _clamp(alignment, 1, 9)
+        style = ASSStyle(**overrides)  # type: ignore[arg-type]
     try:
         path, download_name, media_type = export_job_subtitles(
-            db, job_id, fmt, utf8_bom=bom
+            db, job_id, fmt, utf8_bom=bom, style=style, prefix_speakers=speakers
         )
     except ExportJobError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     return FileResponse(path, media_type=media_type, filename=download_name)
+
+
+def _clamp(value: int | None, low: int, high: int) -> int | None:
+    if value is None:
+        return None
+    return max(low, min(high, value))
+
+
+def _clamp_float(value: float | None, low: float, high: float) -> float | None:
+    if value is None:
+        return None
+    return max(low, min(high, value))

@@ -17,6 +17,7 @@ class SubtitleOut(BaseModel):
     text: str
     original_text: str
     is_edited: bool
+    speaker: str | None = None
     updated_at: datetime
 
 
@@ -45,6 +46,7 @@ class SubtitleSyncItem(BaseModel):
     text: str
     original_text: str | None = None
     is_edited: bool = False
+    speaker: str | None = Field(default=None, max_length=64)
 
 
 class SubtitleSyncRequest(BaseModel):

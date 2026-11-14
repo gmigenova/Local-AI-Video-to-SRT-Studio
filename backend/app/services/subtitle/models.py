@@ -19,6 +19,8 @@ class Subtitle:
     text: str
     original_text: str
     is_edited: bool = False
+    #: speaker label from diarization (post-spec); None = unlabelled
+    speaker: str | None = None
 
     @property
     def duration_ms(self) -> int:
@@ -32,10 +34,12 @@ class Subtitle:
             "text": self.text,
             "original_text": self.original_text,
             "is_edited": self.is_edited,
+            "speaker": self.speaker,
         }
 
     @classmethod
     def from_dict(cls, payload: dict) -> Subtitle:
+        speaker = payload.get("speaker")
         return cls(
             index=int(payload["index"]),
             start_ms=int(payload["start_ms"]),
@@ -43,6 +47,7 @@ class Subtitle:
             text=payload.get("text", ""),
             original_text=payload.get("original_text", payload.get("text", "")),
             is_edited=bool(payload.get("is_edited", False)),
+            speaker=str(speaker) if speaker else None,
         )
 
 

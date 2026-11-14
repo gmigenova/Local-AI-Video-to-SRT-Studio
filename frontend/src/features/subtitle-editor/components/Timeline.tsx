@@ -1,7 +1,9 @@
 // Timeline strip: subtitle blocks along the media duration (§11.5 layout).
-// Block height stacks overlapping subtitles, so overlaps are visible.
+// Block height stacks overlapping subtitles, so overlaps are visible. The
+// audio waveform (when available) renders underneath as a canvas layer.
 
 import type { EditorSubtitle } from '../useSubtitleEditor'
+import WaveformCanvas from './WaveformCanvas'
 
 export default function Timeline({
   durationMs,
@@ -9,6 +11,7 @@ export default function Timeline({
   subtitles,
   activeKey,
   selectedKey,
+  audioUrl,
   onSeek,
   onSelect,
 }: {
@@ -17,6 +20,8 @@ export default function Timeline({
   subtitles: EditorSubtitle[]
   activeKey: string | null
   selectedKey: string | null
+  /** Job audio for the waveform layer; null = none (plain background). */
+  audioUrl: string | null
   onSeek: (ms: number) => void
   onSelect: (key: string) => void
 }) {
@@ -34,6 +39,7 @@ export default function Timeline({
         className="relative h-12 cursor-crosshair touch-none overflow-hidden rounded-lg border border-line bg-surface-2 sm:h-10"
         onClick={handleSeek}
       >
+        {audioUrl ? <WaveformCanvas audioUrl={audioUrl} /> : null}
         {subtitles.map((sub) => {
           const left = (sub.start_ms / total) * 100
           const width = Math.max(((sub.end_ms - sub.start_ms) / total) * 100, 0.25)

@@ -22,12 +22,19 @@ class RendersRepository:
 
     # -- CRUD ----------------------------------------------------------
     def create(
-        self, job_id: str, font_name: str | None = None, source: str = "editor"
+        self,
+        job_id: str,
+        font_name: str | None = None,
+        source: str = "editor",
+        subtitle_format: str = "srt",
+        style_json: dict | None = None,
     ) -> VideoRender:
         render = VideoRender(
             job_id=job_id,
             font_name=font_name,
             source=source,
+            subtitle_format=subtitle_format,
+            style_json=style_json,
             status=RenderStatus.QUEUED.value,
             current_stage="Queued",
         )

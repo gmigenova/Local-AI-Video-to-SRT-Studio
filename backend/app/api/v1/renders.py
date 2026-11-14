@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.errors import ExportError
 from app.database.base import get_db
 from app.models.job import JobStatus
 from app.models.render import ACTIVE_RENDER_STATUSES, RenderStatus, VideoRender
@@ -23,6 +24,7 @@ from app.services.render import (
     normalise_srt,
 )
 from app.services.render.burner import RENDER_SRT_NAME
+from app.services.subtitle import rgb_to_ass_color
 
 router = APIRouter()
 
@@ -41,6 +43,13 @@ def start_render(
     job_id: str,
     font_name: str | None = Form(None),
     srt_file: UploadFile | None = File(None),
+    subtitle_format: str = Form("srt"),
+    # ASS-only style overrides (ignored for plain SRT renders)
+    font_size: int | None = Form(None),
+    primary_color: str | None = Form(None),
+    outline: float | None = Form(None),
+    margin_v: int | None = Form(None),
+    position: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> RenderCreated:
     """Queue a burn-in render.
@@ -49,10 +58,49 @@ def start_render(
     must be completed and have subtitles). With ``srt_file``: burns the
     supplied external ``.srt`` instead - any job status is fine, the media
     file is all that matters.
+
+    ``subtitle_format=ass`` renders a styled ASS (libass ``ass`` filter):
+    the style comes from the optional ``font_name``/``font_size``/
+    ``primary_color``/``outline``/``margin_v``/``position`` fields.
     """
     job = JobsRepository(db).get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found.")
+
+    if subtitle_format not in ("srt", "ass"):
+        raise HTTPException(status_code=400, detail="subtitle_format must be 'srt' or 'ass'.")
+    if subtitle_format == "ass" and srt_file is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="External subtitle files are only supported for plain SRT renders.",
+        )
+
+    style_json: dict | None = None
+    if subtitle_format == "ass":
+        style_json = {}
+        if font_name:
+            style_json["font_name"] = font_name
+        if font_size is not None:
+            style_json["font_size"] = max(8, min(200, font_size))
+        if primary_color is not None:
+            try:
+                style_json["primary_color"] = rgb_to_ass_color(primary_color)
+            except ExportError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if outline is not None:
+            style_json["outline"] = max(0.0, min(6.0, outline))
+        if margin_v is not None:
+            style_json["margin_v"] = max(0, min(400, margin_v))
+        # numpad alignment: bottom-center 2, top-center 8, middle-center 5
+        if position is not None:
+            alignment = {"bottom": 2, "middle": 5, "top": 8}.get(position.lower())
+            if alignment is None:
+                raise HTTPException(
+                    status_code=400, detail="position must be 'bottom', 'middle' or 'top'."
+                )
+            style_json["alignment"] = alignment
+        if not style_json:
+            style_json = None  # default style, nothing overridden
 
     external_text: str | None = None
     subtitle_count: int | None = None
@@ -86,7 +134,13 @@ def start_render(
         )
 
     source = "external" if external_text is not None else "editor"
-    render = RendersRepository(db).create(job_id, font_name=font_name, source=source)
+    render = RendersRepository(db).create(
+        job_id,
+        font_name=font_name,
+        source=source,
+        subtitle_format=subtitle_format,
+        style_json=style_json,
+    )
 
     # stage the validated SRT for the manager to pick up
     if external_text is not None:

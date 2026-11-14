@@ -253,6 +253,29 @@ class TestBuildBurnArgs:
     def test_sanitize_font_name(self):
         assert sanitize_font_name("Arial:Bold'\\") == "ArialBold"
 
+    def test_ass_format_uses_ass_filter_without_force_style(self, tmp_path: Path):
+        paths = (tmp_path / "v.mp4", tmp_path / "render.ass", tmp_path / "o.mp4")
+        args = build_burn_args(*paths, subtitle_format="ass", font_name="Tahoma")
+        filter_value = args[args.index("-vf") + 1]
+        assert filter_value == "ass=render.ass"  # style lives in the file header
+        assert "force_style" not in filter_value
+
+    def test_ass_rejects_the_srt_name_and_vice_versa(self, tmp_path: Path):
+        with pytest.raises(ValueError):
+            build_burn_args(
+                tmp_path / "v.mp4",
+                tmp_path / "render.srt",
+                tmp_path / "o.mp4",
+                subtitle_format="ass",
+            )
+        with pytest.raises(ValueError):
+            build_burn_args(
+                tmp_path / "v.mp4",
+                tmp_path / "render.ass",
+                tmp_path / "o.mp4",
+                subtitle_format="srt",
+            )
+
 
 # ----------------------------------------------------------------------
 # Repository
@@ -392,6 +415,69 @@ class TestRenderApi:
         # a new render can be started after completion
         again = client.post(f"/api/v1/jobs/{completed_job_id}/render")
         assert again.status_code == 201
+
+    @requires_ffmpeg
+    def test_styled_ass_render_lifecycle(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        created = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={
+                "subtitle_format": "ass",
+                "font_name": "Leelawadee UI",
+                "font_size": "56",
+                "primary_color": "00FFFF",
+                "outline": "3",
+                "margin_v": "80",
+                "position": "top",
+            },
+        )
+        assert created.status_code == 201, created.text
+        render_id = created.json()["render_id"]
+
+        assert manual_render_manager.process_once() == render_id
+        done = client.get(f"/api/v1/renders/{render_id}").json()
+        assert done["status"] == "completed"
+        assert done["subtitle_format"] == "ass"
+
+        # the burner burned an ASS file carrying the requested style
+        call = manual_render_manager._burner.calls[0]
+        assert call["subtitle_format"] == "ass"
+        ass_path = Path(call["srt_path"])
+        assert ass_path.name == "render.ass"
+        content = ass_path.read_text(encoding="utf-8")
+        assert content.startswith("[Script Info]")
+        assert "Style: Default,Leelawadee UI,56,&H00FFFF00" in content
+        assert ",3,0,8,10,10,80,1" in content  # outline, shadow, alignment, margins
+        # PlayRes is set from the media dimensions (not the 1920x1080 default)
+        assert "PlayResX:" in content and "PlayResY:" in content
+
+    def test_styled_render_validation(self, client, completed_job_id, clean_renders):
+        # unknown format
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render", data={"subtitle_format": "ssa"}
+        )
+        assert response.status_code == 400
+        # invalid colour
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={"subtitle_format": "ass", "primary_color": "rainbow"},
+        )
+        assert response.status_code == 400
+        assert "colour" in response.json()["detail"]
+        # invalid position
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={"subtitle_format": "ass", "position": "diagonal"},
+        )
+        assert response.status_code == 400
+        # external files are SRT-only for now
+        response = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={"subtitle_format": "ass"},
+            files={"srt_file": ("subs.srt", b"1\n00:00:01,000 --> 00:00:02,000\nhi\n")},
+        )
+        assert response.status_code == 400
 
     @requires_ffmpeg
     def test_cancel_running_render(

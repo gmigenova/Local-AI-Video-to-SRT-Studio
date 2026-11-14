@@ -11,6 +11,9 @@ Build incrementally; never mark a phase complete with failing tests (§20).
 .venv\Scripts\python.exe -m ruff check backend
 Set-Location backend; ..\.venv\Scripts\python.exe -m mypy app; Set-Location ..
 
+# frontend (from frontend/)
+npm run lint; npm run typecheck; npm run test:run
+
 # CLI (must run from backend/)
 Set-Location backend; ..\.venv\Scripts\python.exe -m app.cli transcribe <video> -o <dir>
 ```
@@ -165,6 +168,63 @@ hardcode absolute user paths (§20.11).
   engine default), and the CLI gained `--condition-on-previous-text`.
   The VAD keys were also added to `_OPTION_KEYS`, so Phase-5 VAD tuning
   is now reachable from the API/UI, not just the engine layer.
+- **Post-spec: frontend test foundation** — Vitest + Testing Library
+  (`jsdom`, setup at `frontend/src/test/setup.ts` stubs `matchMedia` /
+  `crypto.randomUUID`; RTL cleanup is manual per-file because vitest runs
+  without globals). 93 tests cover the pure editor logic (quality checks,
+  time parsing, `splitTextAtRatio` incl. Thai code-unit behaviour), the
+  `useSubtitleEditor` hook (undo/redo, typing coalescing, debounced
+  auto-save payload, `applyTranslation`/`applyCleanup`/speaker ops),
+  SearchReplace + SubtitleRow DOM behaviour, and the Zustand stores
+  (singletons — reset via `setState` in `beforeEach`). Gates:
+  `npm run test` (watch) / `test:run` (CI).
+- **Post-spec: LLM subtitle cleanup (Ollama)** — `POST
+  /jobs/{id}/subtitles/cleanup` proofreads the job's *saved* text with a
+  local Ollama instruct model (modes: punctuation, casing, fillers,
+  fluency, thai_polish; model selectable, default
+  `OLLAMA_CLEANUP_MODEL=qwen2.5:7b`). Line-batching/alignment helpers are
+  shared with the translator via `app/services/llm/batching.py`
+  (`ollama_translate.py` delegates to them). Like translate: never touches
+  timestamps, never persists — the editor's CleanupDialog flushes
+  auto-save first, applies results client-side via the shared
+  `applyTextsByIndex` (one undo step) and lets auto-save persist.
+- **Post-spec: waveform in the editor timeline** — `GET /jobs/{id}/audio`
+  serves the extracted 16 kHz mono WAV (clean 404 when retention removed
+  it). `waveform.ts` parses the RIFF container directly (no
+  `decodeAudioData` memory blowup; WebAudio is only the fallback) and
+  computes a min/max peaks envelope; `WaveformCanvas` renders it under the
+  timeline blocks (theme colour, dpr-aware, ResizeObserver redraw, samples
+  cached per URL).
+- **Post-spec: ASS styled export + styled burn-in** — exporters gained
+  `ass` (`format_timestamp_ass` centiseconds, `ASSStyle` dataclass →
+  `[V4+ Styles]` header, brace-neutralising text escaping; all formatting
+  stays in `exporters.py`). `GET /jobs/{id}/export/ass` accepts style
+  query params (font/size/`RRGGBB` colour — converted to BGR — outline,
+  margin, alignment). Burn-in: `video_renders.subtitle_format` +
+  `style_json` (migration `c8d3e5f7a9b1`); `subtitle_format=ass` renders
+  via the libass `ass` filter with the style in the file header (PlayRes
+  from the video dimensions); the POST takes style form fields incl.
+  `position` bottom/middle/top. External `.srt` upload stays SRT-only.
+- **Post-spec: speaker diarization (pyannote, local-only)** — **overrides
+  the v1 spec non-goal (§1.1/§20 "do not implement speaker diarization")
+  by owner decision; cloud stays forbidden — the HuggingFace token is
+  download-only.** Optional dependency
+  (`backend/requirements-diarization.txt`; lazy import, so the app runs
+  without it). `DiarizationService` (`app/services/diarization/`) runs
+  speaker-diarization-3.1 on the extracted WAV after transcription;
+  majority-overlap alignment (`alignment.py`, pure) labels each subtitle
+  row. Off by default; needs `DIARIZE_ENABLED=true` + `HUGGINGFACE_TOKEN`
+  (+ accepted model licenses) — availability (config/import check, no
+  network) is surfaced in `GET /system/info.diarization` and gates the UI
+  checkbox. Unavailable-but-requested degrades to a "Skipped speaker
+  diarization" stage note, never a failed job. Speakers ride the editor
+  sync (`subtitles.speaker`, migration `f4a9c1d2e3b7`) and survive
+  reprocess via `storage/transcripts/{job}/diarization.json` (kept
+  forever). Editor: speaker chip + per-row picker (split/insert inherit),
+  global rename dialog (`SPEAKER_00 → พิธีกร`, one undo step). Export
+  `?speakers=true` prefixes `[Name]` in srt/vtt/txt. CPU perf: ~0.3–1x
+  realtime (1 h video ≈ +30–60 min); `diarize` is a pipeline flag, never
+  a whisper kwarg.
 - **Post-spec: visual polish** (`index.css` + `ui.tsx`) — theme-aware
   elevation tokens (`--shadow-1/2` → utilities `shadow-card`/`shadow-raised`;
   dark mode adds an inset top highlight), a barely-there fixed accent radial
