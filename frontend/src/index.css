@@ -189,19 +189,63 @@ body {
 
 /* translating overlay (Translate dialog in-flight state) */
 
-/* radar rings around the hero icon */
-@keyframes pulse-ring {
+/* script glyphs orbiting the hero icon on a pseudo-3D ellipse: they pass
+   behind the icon (smaller + dimmer) and in front of it. z-index flips at
+   the 37.5%/87.5% stops — the two points where the path clears the icon */
+@keyframes orbit {
   0% {
-    transform: scale(0.55);
-    opacity: 0.6;
+    transform: translate(56px, 0) scale(1);
+    opacity: 0.85;
+    z-index: 3;
   }
-  70% {
-    opacity: 0;
+  12.5% {
+    transform: translate(39.6px, 12.7px) scale(1.1);
+  }
+  25% {
+    transform: translate(0, 18px) scale(1.15);
+    opacity: 1;
+    z-index: 3;
+  }
+  37.5% {
+    transform: translate(-39.6px, 12.7px) scale(1.1);
+  }
+  50% {
+    transform: translate(-56px, 0) scale(1);
+    opacity: 0.85;
+    z-index: 1;
+  }
+  62.5% {
+    transform: translate(-39.6px, -12.7px) scale(0.8);
+  }
+  75% {
+    transform: translate(0, -18px) scale(0.6);
+    opacity: 0.3;
+    z-index: 1;
+  }
+  87.5% {
+    transform: translate(39.6px, -12.7px) scale(0.8);
   }
   100% {
-    transform: scale(1.75);
-    opacity: 0;
+    transform: translate(56px, 0) scale(1);
+    opacity: 0.85;
+    z-index: 3;
   }
+}
+
+/* --angle places each glyph on a static ring (the reduced-motion state,
+   where the killed animation falls back to this transform); --phase
+   (negative delay) phase-shifts the shared orbit keyframes so the six
+   glyphs stay evenly spaced */
+.orbit-glyph {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  translate: -50% -50%;
+  transform: rotate(var(--angle, 0deg)) translateX(56px)
+    rotate(calc(var(--angle, 0deg) * -1));
+  animation: orbit 14s linear infinite;
+  animation-delay: var(--phase, 0s);
 }
 
 /* status-message crossfade (key-swap remount in React) */
@@ -243,10 +287,6 @@ body {
     transform: scale(1);
     opacity: 1;
   }
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 2.4s cubic-bezier(0.16, 0.84, 0.44, 1) infinite;
 }
 
 .animate-msg-in {
