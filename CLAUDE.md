@@ -203,8 +203,16 @@ hardcode absolute user paths (§20.11).
   margin, alignment). Burn-in: `video_renders.subtitle_format` +
   `style_json` (migration `c8d3e5f7a9b1`); `subtitle_format=ass` renders
   via the libass `ass` filter with the style in the file header (PlayRes
-  from the video dimensions); the POST takes style form fields incl.
-  `position` bottom/middle/top. External `.srt` upload stays SRT-only.
+  from the video dimensions; default font/outline/margins scale with video
+  height so a 240p render keeps the 1080p proportions). The POST takes
+  style form fields incl. `position` bottom/middle/top — `position` also
+  works for plain SRT renders: it is stored as `alignment` in `style_json`
+  and the manager **upgrades the burn to a minimal generated ASS**, because
+  `force_style='Alignment=N'` is NOT portable for SRT tracks (libass reads
+  it with SSA-v4 semantics on this build: 8 renders centre, not top —
+  verified empirically, see `test_position_actually_moves_the_subtitles`).
+  External `.srt` upload stays SRT-only; a positioned external burn
+  converts the staged SRT through the same ASS path.
 - **Post-spec: speaker diarization (pyannote, local-only)** — **overrides
   the v1 spec non-goal (§1.1/§20 "do not implement speaker diarization")
   by owner decision; cloud stays forbidden — the HuggingFace token is

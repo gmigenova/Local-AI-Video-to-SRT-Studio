@@ -44,7 +44,8 @@ def start_render(
     font_name: str | None = Form(None),
     srt_file: UploadFile | None = File(None),
     subtitle_format: str = Form("srt"),
-    # ASS-only style overrides (ignored for plain SRT renders)
+    # ASS-only style overrides (font/size/colour/outline/margin); the
+    # position field applies to BOTH formats (SRT burns it via force_style)
     font_size: int | None = Form(None),
     primary_color: str | None = Form(None),
     outline: float | None = Form(None),
@@ -62,6 +63,8 @@ def start_render(
     ``subtitle_format=ass`` renders a styled ASS (libass ``ass`` filter):
     the style comes from the optional ``font_name``/``font_size``/
     ``primary_color``/``outline``/``margin_v``/``position`` fields.
+    ``position`` (bottom/middle/top) also works for plain SRT renders -
+    it is burned in via the filter's ``force_style``.
     """
     job = JobsRepository(db).get(job_id)
     if job is None:
@@ -74,6 +77,15 @@ def start_render(
             status_code=400,
             detail="External subtitle files are only supported for plain SRT renders.",
         )
+
+    # numpad alignment: bottom-center 2, top-center 8, middle-center 5
+    alignment: int | None = None
+    if position is not None:
+        alignment = {"bottom": 2, "middle": 5, "top": 8}.get(position.lower())
+        if alignment is None:
+            raise HTTPException(
+                status_code=400, detail="position must be 'bottom', 'middle' or 'top'."
+            )
 
     style_json: dict | None = None
     if subtitle_format == "ass":
@@ -91,16 +103,13 @@ def start_render(
             style_json["outline"] = max(0.0, min(6.0, outline))
         if margin_v is not None:
             style_json["margin_v"] = max(0, min(400, margin_v))
-        # numpad alignment: bottom-center 2, top-center 8, middle-center 5
-        if position is not None:
-            alignment = {"bottom": 2, "middle": 5, "top": 8}.get(position.lower())
-            if alignment is None:
-                raise HTTPException(
-                    status_code=400, detail="position must be 'bottom', 'middle' or 'top'."
-                )
+        if alignment is not None:
             style_json["alignment"] = alignment
         if not style_json:
             style_json = None  # default style, nothing overridden
+    elif alignment is not None:
+        # plain SRT render with a position override -> force_style later
+        style_json = {"alignment": alignment}
 
     external_text: str | None = None
     subtitle_count: int | None = None

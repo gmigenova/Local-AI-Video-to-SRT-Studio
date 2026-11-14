@@ -75,8 +75,11 @@ def build_burn_args(
     The subtitle file is referenced by bare name only - the caller must run
     FFmpeg with ``cwd`` set to ``srt_path.parent`` (see
     :class:`SubtitleBurner`). ``subtitle_format`` picks the filter: plain
-    SRT via ``subtitles`` (with optional ``force_style`` font) or a styled
-    ASS via ``ass`` (the style lives in the file's header).
+    SRT via ``subtitles`` (with an optional ``force_style`` font) or an ASS
+    via ``ass`` - used both for styled renders and for positioned plain
+    renders (positioning through force_style Alignment is NOT portable:
+    libass interprets it with SSA-v4 values for SRT tracks, where 8 is
+    centre, not top).
     """
     srt_path = Path(srt_path)
     allowed = (RENDER_SRT_NAME, RENDER_ASS_NAME)
@@ -162,7 +165,7 @@ class SubtitleBurner:
 
         ``subtitle_format`` selects the burn filter ("srt" -> ``subtitles``
         with an optional ``force_style`` font, "ass" -> ``ass`` with the
-        style baked into the file header).
+        style - including any position - baked into the file header).
 
         ``on_progress`` receives a 0..1 fraction derived from FFmpeg's
         reported output time vs. ``duration_ms`` - it is only called when

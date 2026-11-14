@@ -80,17 +80,19 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
         fontName: !styled && fontName.trim() ? fontName.trim() : undefined,
         srtFile: useExternal ? file : null,
         subtitleFormat: styled && !useExternal ? 'ass' : 'srt',
-        style:
-          styled && !useExternal
+        // position applies to BOTH modes (plain SRT burns it via force_style)
+        style: {
+          ...(styled && !useExternal
             ? {
                 font_name: fontName.trim() || undefined,
                 font_size: fontSize ? Number.parseInt(fontSize, 10) : undefined,
                 primary_color: fontColor.replace('#', ''),
                 outline: outline ? Number.parseFloat(outline) : undefined,
                 margin_v: marginV ? Number.parseInt(marginV, 10) : undefined,
-                position,
               }
-            : undefined,
+            : {}),
+          position,
+        },
       })
     } catch (error) {
       setStartError(error instanceof Error ? error.message : 'Could not start the render.')
@@ -239,6 +241,20 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
             ))}
           </datalist>
 
+          {/* position works in BOTH modes (plain SRT burns it via force_style) */}
+          <label className="flex items-center gap-1 text-xs text-muted">
+            Position
+            <select
+              className={`${inputClass} px-2 py-1`}
+              value={position}
+              onChange={(e) => setPosition(e.target.value as 'bottom' | 'middle' | 'top')}
+            >
+              <option value="bottom">Bottom</option>
+              <option value="top">Top</option>
+              <option value="middle">Middle</option>
+            </select>
+          </label>
+
           {styled && !useExternal ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
               <label className="flex items-center gap-1">
@@ -283,18 +299,6 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
                   value={marginV}
                   onChange={(e) => setMarginV(e.target.value)}
                 />
-              </label>
-              <label className="flex items-center gap-1">
-                Position
-                <select
-                  className={`${inputClass} px-2 py-1`}
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value as 'bottom' | 'middle' | 'top')}
-                >
-                  <option value="bottom">Bottom</option>
-                  <option value="middle">Middle</option>
-                  <option value="top">Top</option>
-                </select>
               </label>
             </div>
           ) : null}

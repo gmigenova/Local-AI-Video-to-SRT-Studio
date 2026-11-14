@@ -129,16 +129,51 @@ class RenderManager:
             media = job.media
 
             render_dir = self.settings.storage_subdir("renders") / render_id
-            subtitle_format = render.subtitle_format or "srt"
+            stored_format = render.subtitle_format or "srt"
+            style_json = render.style_json or {}
+            # A position override on a plain SRT render upgrades the burn to
+            # a minimal ASS: force_style Alignment is interpreted with SSA-v4
+            # values on this ffmpeg/libass (8 renders centre, not top), while
+            # a proper v4+ style file positions deterministically everywhere.
+            srt_positioned = (
+                stored_format != "ass" and style_json.get("alignment") is not None
+            )
+            burn_format = "ass" if (stored_format == "ass" or srt_positioned) else "srt"
             subtitle_path = (
-                render_dir / RENDER_ASS_NAME if subtitle_format == "ass" else render_dir / RENDER_SRT_NAME
+                render_dir / RENDER_ASS_NAME if burn_format == "ass" else render_dir / RENDER_SRT_NAME
             )
             output_path = render_dir / "output.mp4"
             render_dir.mkdir(parents=True, exist_ok=True)
 
-            if render.source == "external" and subtitle_path.is_file():
+            def build_style() -> ASSStyle:
+                """ASSStyle from the stored overrides.
+
+                PlayRes matches the video so coordinates are 1:1 pixels;
+                the DEFAULT font/outline/margins are scaled by video height
+                (they are defined at 1080p) so a 240p render keeps the same
+                on-screen proportion instead of giant text. Explicit user
+                overrides win.
+                """
+                scale = (media.height or 1080) / 1080
+                defaults: dict[str, object] = {
+                    "font_size": max(8.0, round(48 * scale)),
+                    "outline": max(1.0, 2 * scale),
+                    "margin_v": max(4, round(40 * scale)),
+                }
+                return ASSStyle(
+                    **{
+                        **defaults,
+                        **style_json,
+                        "play_res_x": media.width or 1920,
+                        "play_res_y": media.height or 1080,
+                    }  # type: ignore[arg-type]
+                )
+
+            if render.source == "external" and (render_dir / RENDER_SRT_NAME).is_file():
                 # an uploaded SRT was validated + staged at creation time
                 logger.info("Render %s uses an external subtitle file.", render_id)
+                if srt_positioned:
+                    self._convert_staged_srt_to_ass(render_dir, build_style())
             else:
                 rows = SubtitlesRepository(db).list_for_job(render.job_id)
                 if not rows:
@@ -151,16 +186,9 @@ class RenderManager:
                     )
                     return
                 try:
-                    style: ASSStyle | None = None
-                    if subtitle_format == "ass":
-                        # PlayRes matches the video so font sizes scale 1:1
-                        style = ASSStyle(
-                            **{
-                                **(render.style_json or {}),
-                                "play_res_x": media.width or 1920,
-                                "play_res_y": media.height or 1080,
-                            }  # type: ignore[arg-type]
-                        )
+                    style: ASSStyle | None = (
+                        build_style() if burn_format == "ass" else None
+                    )
                     export_subtitles(
                         [
                             Subtitle(
@@ -174,7 +202,7 @@ class RenderManager:
                             for r in rows
                         ],
                         subtitle_path,
-                        subtitle_format,
+                        burn_format,
                         style=style,
                     )
                 except VideoToSrtError as exc:
@@ -209,7 +237,7 @@ class RenderManager:
                     output_path,
                     duration_ms=media.duration_ms,
                     font_name=render.font_name,
-                    subtitle_format=subtitle_format,
+                    subtitle_format=burn_format,
                     audio_codec=media.audio_codec,
                     cancel_event=cancel_event,
                     on_progress=on_progress,
@@ -259,6 +287,32 @@ class RenderManager:
             logger.info("Render %s completed (%d bytes).", render_id, result.file_size)
         finally:
             db.close()
+
+    def _convert_staged_srt_to_ass(self, render_dir: Path, style: ASSStyle) -> None:
+        """Rewrite a staged external SRT as an ASS (positioned external burns).
+
+        Uses the same parser as subtitle import; failure is a clean render
+        error (the SRT was already validated at upload, so this is unlikely).
+        """
+        from app.services.render.srt_import import parse_srt
+
+        srt_text = (render_dir / RENDER_SRT_NAME).read_text(encoding="utf-8")
+        cues = parse_srt(srt_text)
+        export_subtitles(
+            [
+                Subtitle(
+                    index=i,
+                    start_ms=cue.start_ms,
+                    end_ms=cue.end_ms,
+                    text=cue.text,
+                    original_text=cue.text,
+                )
+                for i, cue in enumerate(cues, start=1)
+            ],
+            render_dir / RENDER_ASS_NAME,
+            "ass",
+            style=style,
+        )
 
     def _fresh_session(self) -> Session:
         return self._session_factory()

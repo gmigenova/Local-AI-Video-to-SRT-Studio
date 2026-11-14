@@ -452,6 +452,36 @@ class TestRenderApi:
         # PlayRes is set from the media dimensions (not the 1920x1080 default)
         assert "PlayResX:" in content and "PlayResY:" in content
 
+    @requires_ffmpeg
+    def test_plain_render_with_position_upgrades_to_ass(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        """A positioned plain SRT render burns through a generated ASS -
+        force_style Alignment is not portable (SSA-v4 semantics), so the
+        position is baked into a minimal v4+ style instead."""
+        created = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={"position": "top"},
+        )
+        assert created.status_code == 201, created.text
+        render_id = created.json()["render_id"]
+
+        assert manual_render_manager.process_once() == render_id
+        done = client.get(f"/api/v1/renders/{render_id}").json()
+        assert done["status"] == "completed"
+        assert done["subtitle_format"] == "srt"  # the user's choice is echoed
+
+        call = manual_render_manager._burner.calls[0]
+        assert call["subtitle_format"] == "ass"  # internally upgraded
+        ass_path = Path(call["srt_path"])
+        assert ass_path.name == "render.ass"
+        content = ass_path.read_text(encoding="utf-8")
+        assert content.startswith("[Script Info]")
+        assert "ScriptType: v4.00+" in content
+        # Alignment=8 (top-center); the default outline/margin scale with the
+        # 320x240 sample (defaults are defined at 1080p): 1 / 9
+        assert ",1,0,8,10,10,9,1" in content
+
     def test_styled_render_validation(self, client, completed_job_id, clean_renders):
         # unknown format
         response = client.post(
@@ -690,5 +720,73 @@ class TestRealBurn:
             assert download.status_code == 200
             assert download.headers["content-type"].startswith("video/mp4")
             assert "subtitled" in download.headers.get("content-disposition", "")
+        finally:
+            set_render_manager(None)
+
+    @requires_ffmpeg
+    def test_position_actually_moves_the_subtitles(
+        self, client, completed_job_id, clean_renders
+    ):
+        """The position choice must show up in real pixels: render the same
+        job bottom (default) and top, then locate the differing rows in a
+        frame from the middle of the cue - the text must move across the
+        mid-line. (force_style Alignment means SSA-v4 values for SRT, which
+        is why positioned burns go through a generated ASS instead.)"""
+        import subprocess as sp
+
+        from conftest import FFMPEG
+
+        from app.services.render.burner import SubtitleBurner
+
+        def gray_frame(path: Path) -> bytes:
+            proc = sp.run(  # noqa: S603 - fixed argv, no shell
+                [
+                    FFMPEG, "-y", "-v", "error", "-ss", "1.5", "-i", str(path),
+                    "-frames:v", "1", "-vf", "scale=64:48",
+                    "-f", "rawvideo", "-pix_fmt", "gray", "-",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            return proc.stdout
+
+        manager = ManualManager(burner=SubtitleBurner())
+        set_render_manager(manager)
+        try:
+            outputs: dict[str, Path] = {}
+            for label, form in (
+                ("bottom", {}),
+                ("top", {"position": "top"}),
+            ):
+                render_id = client.post(
+                    f"/api/v1/jobs/{completed_job_id}/render", data=form
+                ).json()["render_id"]
+                assert manager.process_once() == render_id
+                done = client.get(f"/api/v1/renders/{render_id}").json()
+                assert done["status"] == "completed", done
+                outputs[label] = (
+                    get_settings().storage_subdir("renders") / render_id / "output.mp4"
+                )
+
+            bottom = gray_frame(outputs["bottom"])
+            top = gray_frame(outputs["top"])
+            assert len(bottom) == 64 * 48 and len(top) == 64 * 48
+
+            hot_rows: list[int] = []
+            for y in range(48):
+                row_diff = max(
+                    abs(a - b)
+                    for a, b in zip(
+                        bottom[y * 64 : (y + 1) * 64],
+                        top[y * 64 : (y + 1) * 64],
+                        strict=True,
+                    )
+                )
+                if row_diff > 30:  # subtitle text; encoder ripple stays below
+                    hot_rows.append(y)
+
+            assert hot_rows, "the two renders differ nowhere - no subtitle burned?"
+            assert min(hot_rows) < 24, f"text never reached the top half: {hot_rows}"
+            assert max(hot_rows) >= 24, f"text never left the bottom half: {hot_rows}"
         finally:
             set_render_manager(None)
