@@ -223,12 +223,15 @@ export function Modal({
   onClose,
   children,
   wide = false,
+  hideClose = false,
 }: {
   open: boolean
   title: string
   onClose: () => void
   children: ReactNode
   wide?: boolean
+  /** hide the header X (e.g. while an in-flight state owns the dialog) */
+  hideClose?: boolean
 }) {
   if (!open) return null
   return (
@@ -245,13 +248,15 @@ export function Modal({
         <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
         <div className="sticky top-0 flex items-center justify-between border-b border-line bg-surface px-5 py-3.5">
           <h2 className="text-sm font-semibold">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text"
-            aria-label="Close"
-          >
-            <X size={16} />
-          </button>
+          {hideClose ? null : (
+            <button
+              onClick={onClose}
+              className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-text"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
         <div className="p-5">{children}</div>
       </div>

@@ -3,7 +3,7 @@
 // list (applied as one undo step). Google shows the monthly character
 // budget; Ollama is free/local and needs an explicit source language.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Check, Info, Languages } from 'lucide-react'
 
@@ -11,6 +11,11 @@ import { api } from '../../../api/client'
 import { useTranslationInfo, useTranslationUsage } from '../../../api/hooks'
 import type { TranslationEngineId, TranslateMode, TranslateResult } from '../../../types'
 import { Button, Field, Modal, Progress, Spinner, inputClass } from '../../../components/ui'
+import { languageName } from '../../../utils/format'
+import TranslatingState from './TranslatingState'
+
+/** idle = form, translating = in-flight overlay, success = beat before close */
+type Phase = 'idle' | 'translating' | 'success'
 
 interface TranslateDialogProps {
   jobId: string
@@ -56,8 +61,20 @@ export default function TranslateDialog({
   const [target, setTarget] = useState<string>(detectedLanguage === 'th' ? 'en' : 'th')
   const [source, setSource] = useState<string>(detectedLanguage ?? 'auto')
   const [mode, setMode] = useState<TranslateMode>('replace')
-  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [successResult, setSuccessResult] = useState<TranslateResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const busy = phase !== 'idle'
+
+  // the success beat awaits before calling onApply — skip the call if the
+  // dialog unmounted meanwhile (route change etc.)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
 
   // keep the selects valid once the catalog / engine status loads
   useEffect(() => {
@@ -82,8 +99,8 @@ export default function TranslateDialog({
   const ollamaMissingSource = engine === 'ollama' && effectiveSource === null
 
   const submit = async () => {
-    setBusy(true)
     setError(null)
+    setPhase('translating')
     try {
       // flush pending edits first so the translation matches what the user sees
       const saved = await onBeforeTranslate()
@@ -98,11 +115,14 @@ export default function TranslateDialog({
       if (engine === 'google') {
         void queryClient.invalidateQueries({ queryKey: ['translation-usage'] })
       }
-      onApply(result)
+      // short success beat, then hand over to the editor (which closes us)
+      setSuccessResult(result)
+      setPhase('success')
+      await new Promise((resolve) => setTimeout(resolve, 750))
+      if (alive.current) onApply(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Translation failed')
-    } finally {
-      setBusy(false)
+      setPhase('idle')
     }
   }
 
@@ -116,9 +136,29 @@ export default function TranslateDialog({
 
   const showGoogleWarning = engine === 'google' && !googleConfigured
 
+  const sourceLabel =
+    source === 'auto' && engine === 'google' ? 'Auto-detect' : languageName(effectiveSource)
+  const targetLabel = languageName(target)
+
   return (
-    <Modal open title="Translate subtitles" onClose={busy ? () => undefined : onClose}>
-      <div className="space-y-4">
+    <Modal
+      open
+      title="Translate subtitles"
+      onClose={busy ? () => undefined : onClose}
+      hideClose={busy}
+    >
+      {phase !== 'idle' ? (
+        <TranslatingState
+          phase={phase}
+          engine={engine}
+          model={model}
+          subtitleCount={subtitleCount}
+          sourceLabel={sourceLabel}
+          targetLabel={targetLabel}
+          result={successResult}
+        />
+      ) : (
+      <div className="animate-fade-in space-y-4">
         <p className="flex items-center gap-2 text-xs text-muted">
           <Languages size={14} className="shrink-0" />
           {engine === 'ollama' ? `Ollama · ${model}` : 'Google Cloud Translation'} ·{' '}
@@ -360,16 +400,17 @@ export default function TranslateDialog({
             ) : null}
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="secondary" onClick={onClose} disabled={busy}>
+              <Button variant="secondary" onClick={onClose}>
                 Cancel
               </Button>
               <Button onClick={() => void submit()} disabled={!canSubmit}>
-                {busy ? <Spinner className="h-4 w-4" /> : <Languages size={15} />} Translate
+                <Languages size={15} /> Translate
               </Button>
             </div>
           </>
         )}
       </div>
+      )}
     </Modal>
   )
 }

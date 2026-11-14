@@ -187,6 +187,87 @@ body {
   animation: sheen 1.6s ease-in-out infinite;
 }
 
+/* translating overlay (Translate dialog in-flight state) */
+
+/* radar rings around the hero icon */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.6;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+/* status-message crossfade (key-swap remount in React) */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* language-pair arrow nudge, synced to the 1.6s working clock */
+@keyframes arrow-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+}
+
+/* success beat: small spring pop for the check */
+@keyframes success-pop {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  62% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2.4s cubic-bezier(0.16, 0.84, 0.44, 1) infinite;
+}
+
+.animate-msg-in {
+  animation: msg-in 0.24s ease-out both;
+}
+
+.animate-arrow-pulse {
+  animation: arrow-pulse 1.6s ease-in-out infinite;
+}
+
+.animate-success-pop {
+  animation: success-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* indeterminate meter — reuses the sheen keyframes on purpose: same
+   -100%→250% travel on a 40%-wide element, same 1.6s cadence as the
+   progress-sheen so both read as one "work in progress" language */
+.animate-indeterminate {
+  animation: sheen 1.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
