@@ -131,14 +131,15 @@ class RenderManager:
             render_dir = self.settings.storage_subdir("renders") / render_id
             stored_format = render.subtitle_format or "srt"
             style_json = render.style_json or {}
-            # A position override on a plain SRT render upgrades the burn to
-            # a minimal ASS: force_style Alignment is interpreted with SSA-v4
-            # values on this ffmpeg/libass (8 renders centre, not top), while
-            # a proper v4+ style file positions deterministically everywhere.
-            srt_positioned = (
-                stored_format != "ass" and style_json.get("alignment") is not None
+            # font_size / position overrides on a plain SRT render upgrade
+            # the burn to a minimal ASS: force_style Alignment is read with
+            # SSA-v4 values on this ffmpeg/libass (8 renders centre, not
+            # top) and force_style FontSize is PlayRes-relative (288), so
+            # neither is controllable - a proper v4+ style file is.
+            srt_upgraded = stored_format != "ass" and any(
+                key in style_json for key in ("alignment", "font_size")
             )
-            burn_format = "ass" if (stored_format == "ass" or srt_positioned) else "srt"
+            burn_format = "ass" if (stored_format == "ass" or srt_upgraded) else "srt"
             subtitle_path = (
                 render_dir / RENDER_ASS_NAME if burn_format == "ass" else render_dir / RENDER_SRT_NAME
             )
@@ -172,7 +173,7 @@ class RenderManager:
             if render.source == "external" and (render_dir / RENDER_SRT_NAME).is_file():
                 # an uploaded SRT was validated + staged at creation time
                 logger.info("Render %s uses an external subtitle file.", render_id)
-                if srt_positioned:
+                if srt_upgraded:
                     self._convert_staged_srt_to_ass(render_dir, build_style())
             else:
                 rows = SubtitlesRepository(db).list_for_job(render.job_id)

@@ -44,8 +44,10 @@ def start_render(
     font_name: str | None = Form(None),
     srt_file: UploadFile | None = File(None),
     subtitle_format: str = Form("srt"),
-    # ASS-only style overrides (font/size/colour/outline/margin); the
-    # position field applies to BOTH formats (SRT burns it via force_style)
+    # ASS style overrides. font_name alone keeps the plain SRT look
+    # (force_style); font_size / position apply to BOTH formats (the burn
+    # is upgraded to a minimal generated ASS); colour/outline/margin are
+    # ASS-only.
     font_size: int | None = Form(None),
     primary_color: str | None = Form(None),
     outline: float | None = Form(None),
@@ -63,8 +65,9 @@ def start_render(
     ``subtitle_format=ass`` renders a styled ASS (libass ``ass`` filter):
     the style comes from the optional ``font_name``/``font_size``/
     ``primary_color``/``outline``/``margin_v``/``position`` fields.
-    ``position`` (bottom/middle/top) also works for plain SRT renders -
-    it is burned in via the filter's ``force_style``.
+    ``font_size`` and ``position`` (bottom/middle/top) also work for plain
+    SRT renders - the manager upgrades those burns to a minimal generated
+    ASS so the values mean the same thing at every resolution.
     """
     job = JobsRepository(db).get(job_id)
     if job is None:
@@ -107,9 +110,20 @@ def start_render(
             style_json["alignment"] = alignment
         if not style_json:
             style_json = None  # default style, nothing overridden
-    elif alignment is not None:
-        # plain SRT render with a position override -> force_style later
-        style_json = {"alignment": alignment}
+    else:
+        # plain SRT: font_size / position upgrade the burn to a generated
+        # ASS (force_style sizing is PlayRes-relative and not controllable;
+        # its Alignment means SSA-v4 values). A font NAME alone keeps the
+        # plain SRT look via force_style.
+        srt_overrides: dict = {}
+        if font_size is not None:
+            srt_overrides["font_size"] = max(8, min(200, font_size))
+        if alignment is not None:
+            srt_overrides["alignment"] = alignment
+        if srt_overrides and font_name:
+            srt_overrides["font_name"] = font_name
+        if srt_overrides:
+            style_json = srt_overrides
 
     external_text: str | None = None
     subtitle_count: int | None = None

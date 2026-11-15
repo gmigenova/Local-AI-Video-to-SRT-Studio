@@ -48,7 +48,8 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
   const [cueCount, setCueCount] = useState<number | null>(null)
   const [styled, setStyled] = useState(false)
   const [fontName, setFontName] = useState('')
-  const [fontSize, setFontSize] = useState('48')
+  /** empty = engine default (48 at 1080p, scaled by video height) */
+  const [fontSize, setFontSize] = useState('')
   const [fontColor, setFontColor] = useState('#ffffff')
   const [outline, setOutline] = useState('2')
   const [marginV, setMarginV] = useState('40')
@@ -77,20 +78,21 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
     try {
       await startRender.mutateAsync({
         jobId,
-        fontName: !styled && fontName.trim() ? fontName.trim() : undefined,
+        // font name: plain SRT burns it via force_style, ASS via the style
+        fontName: fontName.trim() || undefined,
         srtFile: useExternal ? file : null,
         subtitleFormat: styled && !useExternal ? 'ass' : 'srt',
-        // position applies to BOTH modes (plain SRT burns it via force_style)
+        // font_size + position apply to BOTH modes (the backend upgrades
+        // plain SRT burns to a generated ASS so the values are meaningful)
         style: {
           ...(styled && !useExternal
             ? {
-                font_name: fontName.trim() || undefined,
-                font_size: fontSize ? Number.parseInt(fontSize, 10) : undefined,
                 primary_color: fontColor.replace('#', ''),
                 outline: outline ? Number.parseFloat(outline) : undefined,
                 margin_v: marginV ? Number.parseInt(marginV, 10) : undefined,
               }
             : {}),
+          font_size: fontSize ? Number.parseInt(fontSize, 10) : undefined,
           position,
         },
       })
@@ -241,33 +243,40 @@ export default function BurnInVideo({ jobId, onBeforeStart, onClose }: Props) {
             ))}
           </datalist>
 
-          {/* position works in BOTH modes (plain SRT burns it via force_style) */}
-          <label className="flex items-center gap-1 text-xs text-muted">
-            Position
-            <select
-              className={`${inputClass} px-2 py-1`}
-              value={position}
-              onChange={(e) => setPosition(e.target.value as 'bottom' | 'middle' | 'top')}
+          {/* size + position work in BOTH modes (plain SRT burns upgrade
+              to a generated ASS server-side) */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <label className="flex items-center gap-1">
+              Position
+              <select
+                className={`${inputClass} px-2 py-1`}
+                value={position}
+                onChange={(e) => setPosition(e.target.value as 'bottom' | 'middle' | 'top')}
+              >
+                <option value="bottom">Bottom</option>
+                <option value="top">Top</option>
+                <option value="middle">Middle</option>
+              </select>
+            </label>
+            <label
+              className="flex items-center gap-1"
+              title="Subtitle font size — 48 ≈ default on a 1080p video; scales with video height"
             >
-              <option value="bottom">Bottom</option>
-              <option value="top">Top</option>
-              <option value="middle">Middle</option>
-            </select>
-          </label>
+              Size
+              <input
+                className={`${inputClass} w-16 px-2 py-1`}
+                type="number"
+                min={8}
+                max={200}
+                placeholder="48"
+                value={fontSize}
+                onChange={(e) => setFontSize(e.target.value)}
+              />
+            </label>
+          </div>
 
           {styled && !useExternal ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <label className="flex items-center gap-1">
-                Size
-                <input
-                  className={`${inputClass} w-16 px-2 py-1`}
-                  type="number"
-                  min={8}
-                  max={200}
-                  value={fontSize}
-                  onChange={(e) => setFontSize(e.target.value)}
-                />
-              </label>
               <label className="flex items-center gap-1">
                 Colour
                 <input

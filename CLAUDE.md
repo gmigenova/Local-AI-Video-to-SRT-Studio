@@ -205,14 +205,17 @@ hardcode absolute user paths (§20.11).
   via the libass `ass` filter with the style in the file header (PlayRes
   from the video dimensions; default font/outline/margins scale with video
   height so a 240p render keeps the 1080p proportions). The POST takes
-  style form fields incl. `position` bottom/middle/top — `position` also
-  works for plain SRT renders: it is stored as `alignment` in `style_json`
+  style form fields incl. `position` bottom/middle/top and `font_size` —
+  both also work for plain SRT renders: they are stored in `style_json`
   and the manager **upgrades the burn to a minimal generated ASS**, because
   `force_style='Alignment=N'` is NOT portable for SRT tracks (libass reads
-  it with SSA-v4 semantics on this build: 8 renders centre, not top —
-  verified empirically, see `test_position_actually_moves_the_subtitles`).
-  External `.srt` upload stays SRT-only; a positioned external burn
-  converts the staged SRT through the same ASS path.
+  it with SSA-v4 semantics on this build: 8 renders centre, not top) and
+  `force_style` FontSize is PlayRes-relative (288), i.e. uncontrollable
+  (both verified empirically — see
+  `test_position_actually_moves_the_subtitles` + the upgrade tests). A
+  font NAME alone stays on the plain SRT + force_style path. External
+  `.srt` upload stays SRT-only; an upgraded external burn converts the
+  staged SRT through the same ASS path.
 - **Post-spec: speaker diarization (pyannote, local-only)** — **overrides
   the v1 spec non-goal (§1.1/§20 "do not implement speaker diarization")
   by owner decision; cloud stays forbidden — the HuggingFace token is

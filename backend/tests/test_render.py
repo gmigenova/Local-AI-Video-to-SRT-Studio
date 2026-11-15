@@ -482,6 +482,45 @@ class TestRenderApi:
         # 320x240 sample (defaults are defined at 1080p): 1 / 9
         assert ",1,0,8,10,10,9,1" in content
 
+    @requires_ffmpeg
+    def test_plain_render_with_font_size_upgrades_to_ass(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        """font_size on a plain SRT render upgrades to a generated ASS too -
+        force_style FontSize is PlayRes-relative (288) and uncontrollable."""
+        created = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render",
+            data={"font_size": "40", "font_name": "Tahoma"},
+        )
+        assert created.status_code == 201, created.text
+        render_id = created.json()["render_id"]
+
+        assert manual_render_manager.process_once() == render_id
+        assert client.get(f"/api/v1/renders/{render_id}").json()["status"] == "completed"
+
+        call = manual_render_manager._burner.calls[0]
+        assert call["subtitle_format"] == "ass"  # internally upgraded
+        content = Path(call["srt_path"]).read_text(encoding="utf-8")
+        # the requested size + font land in the Style line (defaults for
+        # outline/margins scale with the 240p sample video)
+        assert "Style: Default,Tahoma,40," in content
+
+    @requires_ffmpeg
+    def test_plain_render_with_font_name_only_stays_srt(
+        self, client, completed_job_id, manual_render_manager, clean_renders
+    ):
+        """A font NAME alone keeps the plain SRT look (force_style path)."""
+        created = client.post(
+            f"/api/v1/jobs/{completed_job_id}/render", data={"font_name": "Tahoma"}
+        )
+        assert created.status_code == 201
+        render_id = created.json()["render_id"]
+        assert manual_render_manager.process_once() == render_id
+
+        call = manual_render_manager._burner.calls[0]
+        assert call["subtitle_format"] == "srt"
+        assert Path(call["srt_path"]).name == "render.srt"
+
     def test_styled_render_validation(self, client, completed_job_id, clean_renders):
         # unknown format
         response = client.post(
