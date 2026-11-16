@@ -248,6 +248,20 @@ hardcode absolute user paths (§20.11).
   **No external font loading** — a Google Fonts link made first paint hang
   on machines without internet (this is a local-first app); the stack stays
   Inter→system-ui/Segoe UI Variable with graceful fallback.
+- **Post-spec: Processing page motion** — the transcription progress page
+  got the full motion treatment, all inside the existing vocabulary:
+  an `EqualizerBars` hero (5 `scaleY` bars, per-bar `--i` period/delay in
+  `eq-bar` keyframes → non-repeating rhythm; base transform is the static
+  staircase for inactive/reduced-motion, same fallback trick as
+  `.orbit-glyph`) replaces the `Cpu` icon; stage labels crossfade via
+  keyed `.animate-msg-in` remounts; a `CyclingStatusMessage` rotates
+  friendly lines every 2.4s (loops, not clamps — long jobs; cycling text
+  aria-hidden, stable stage-only sr-only line in a polite live region);
+  the % readout tweens between the 1.5s polls via `useTweenedNumber`
+  (rAF + easeOutCubic, 900ms; snaps on mount/reduced-motion/backwards
+  target = retry; `Progress` itself keeps the raw value — its fill
+  already CSS-transitions). `usePrefersReducedMotion` now lives in
+  `src/hooks/` (shared with TranslatingState, which had it locally).
 
 ## Architecture invariants (do not break)
 
