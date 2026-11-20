@@ -114,3 +114,25 @@ def get_job_audio(job_id: str, db: Session = Depends(get_db)) -> FileResponse:
             detail="No extracted audio is available for this job.",
         )
     return FileResponse(audio_path, media_type="audio/wav")
+
+
+@router.get("/jobs/{job_id}/transcript")
+def get_job_transcript(job_id: str, db: Session = Depends(get_db)) -> FileResponse:
+    """The raw AI transcript (transcript.json: segments + per-word
+    probability) - powers the editor's low-confidence word highlighting.
+
+    Jobs whose subtitles were imported from an external .srt never had a
+    transcript, and retention may remove it for old jobs
+    (RETENTION_TRANSCRIPT_DAYS) - both surface as a clean 404 the client
+    treats as "no confidence data".
+    """
+    _get_job_or_404(db, job_id)
+    transcript_path = (
+        get_settings().storage_subdir("transcripts") / job_id / "transcript.json"
+    )
+    if not transcript_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="No raw transcript is available for this job.",
+        )
+    return FileResponse(transcript_path, media_type="application/json")

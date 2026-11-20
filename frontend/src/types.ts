@@ -102,6 +102,10 @@ export interface Job {
   started_at: string | null
   completed_at: string | null
   created_at: string
+  /** Wall time of the latest run in ms; null while queued/running. */
+  processing_ms: number | null
+  /** Source video duration in ms (upload-time probe); null when unknown. */
+  media_duration_ms: number | null
 }
 
 export interface JobList {
@@ -132,6 +136,30 @@ export interface SyncSubtitleItem {
   original_text: string
   is_edited: boolean
   speaker: string | null
+}
+
+// ---- Raw AI transcript (per-word confidence for the editor) ----
+
+export interface TranscriptWord {
+  start_ms: number
+  end_ms: number
+  word: string
+  probability: number | null
+}
+
+export interface TranscriptSegment {
+  start_ms: number
+  end_ms: number
+  text: string
+  confidence: number | null
+  words: TranscriptWord[]
+}
+
+export interface TranscriptPayload {
+  language: string | null
+  language_probability: number | null
+  duration_ms: number | null
+  segments: TranscriptSegment[]
 }
 
 // ---- Subtitle translation (Google Cloud Translation + Ollama TranslateGemma) ----
@@ -207,6 +235,28 @@ export interface TranslateResult {
 // ---- LLM subtitle cleanup (local Ollama) ----
 
 export type CleanupMode = 'punctuation' | 'casing' | 'fillers' | 'fluency' | 'thai_polish'
+
+// ---- Video summary (local Ollama from the saved subtitles) ----
+
+export interface SummarizeRequest {
+  model?: string | null
+  language?: 'en' | 'th' | null
+}
+
+export interface SummaryKeyPoint {
+  time_ms: number | null
+  text: string
+}
+
+export interface SummaryResult {
+  job_id: string
+  model: string
+  language: 'en' | 'th'
+  summary: string
+  key_points: SummaryKeyPoint[]
+  cue_count: number
+  generated_at: string
+}
 
 export interface CleanupRequest {
   modes: CleanupMode[]

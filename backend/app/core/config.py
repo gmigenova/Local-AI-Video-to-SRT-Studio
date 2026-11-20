@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     #: pick a Thai-capable instruct model, e.g. qwen2.5:7b or llama3.1:8b
     ollama_cleanup_model: str = "qwen2.5:7b"
 
+    # Ollama (local LLM video summary from the saved subtitles)
+    #: empty = fall back to OLLAMA_CLEANUP_MODEL
+    ollama_summary_model: str = ""
+
     # Speaker diarization (pyannote.audio; post-spec feature, local-only).
     #: master switch - the checkbox in the UI only appears when enabled
     diarize_enabled: bool = False

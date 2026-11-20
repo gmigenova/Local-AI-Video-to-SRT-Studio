@@ -8,6 +8,7 @@ import {
   ACTIVE_RENDER_STATUSES,
   type CreateJobRequest,
   type RenderStyleOptions,
+  type SummarizeRequest,
 } from '../types'
 
 export function useHealth() {
@@ -176,12 +177,57 @@ export function useSubtitles(jobId: string | undefined, enabled = true) {
   })
 }
 
+/** Raw AI transcript (per-word probability): null when the job has none
+ *  (imported SRT / retention removed it) — the 404 is swallowed. */
+export function useTranscript(jobId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['transcript', jobId],
+    queryFn: async () => {
+      try {
+        return await api.getTranscript(jobId!)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    enabled: Boolean(jobId) && enabled,
+    staleTime: Infinity, // transcript.json is immutable once the job completes
+  })
+}
+
 /** Language catalog + whether the Google Cloud Translation key is set. */
 export function useTranslationInfo() {
   return useQuery({
     queryKey: ['translation-info'],
     queryFn: api.translationInfo,
     staleTime: 5 * 60_000,
+  })
+}
+
+/** Stored video summary: null until one has been generated (404 swallowed). */
+export function useSummary(jobId: string | undefined) {
+  return useQuery({
+    queryKey: ['summary', jobId],
+    queryFn: async () => {
+      try {
+        return await api.getSummary(jobId!)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    enabled: Boolean(jobId),
+    staleTime: 60_000,
+  })
+}
+
+export function useSummarize() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, payload }: { jobId: string; payload: SummarizeRequest }) =>
+      api.summarizeJob(jobId, payload),
+    onSuccess: (result) =>
+      client.setQueryData(['summary', result.job_id], result),
   })
 }
 

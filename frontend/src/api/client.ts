@@ -14,7 +14,10 @@ import type {
   RenderStyleOptions,
   Subtitle,
   SyncSubtitleItem,
+  SummaryResult,
+  SummarizeRequest,
   SystemInfo,
+  TranscriptPayload,
   TranslateRequest,
   TranslateResult,
   TranslationInfo,
@@ -157,6 +160,10 @@ export const api = {
       { method: 'POST', body: form },
     )
   },
+  /** Raw transcript.json — segments with per-word probability. 404 when the
+   *  job was imported from an external SRT or retention removed the file. */
+  getTranscript: (jobId: string) =>
+    request<TranscriptPayload>(`/jobs/${jobId}/transcript`),
 
   // Google Cloud Translation (subtitle translation)
   translationInfo: () => request<TranslationInfo>('/translation/languages'),
@@ -173,6 +180,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  // LLM video summary (local Ollama; persisted server-side per job)
+  summarizeJob: (jobId: string, payload: SummarizeRequest) =>
+    request<SummaryResult>(`/jobs/${jobId}/summarize`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getSummary: (jobId: string) => request<SummaryResult>(`/jobs/${jobId}/summary`),
 
   // video render (subtitle burn-in)
   startRender: (

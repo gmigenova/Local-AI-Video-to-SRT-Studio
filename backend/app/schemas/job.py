@@ -35,6 +35,10 @@ class JobOut(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
+    #: wall time of the latest run (claim -> terminal); null while unfinished
+    processing_ms: int | None = None
+    #: duration of the source video (upload-time ffprobe probe); may be null
+    media_duration_ms: int | None = None
 
 
 class JobStatusOut(BaseModel):

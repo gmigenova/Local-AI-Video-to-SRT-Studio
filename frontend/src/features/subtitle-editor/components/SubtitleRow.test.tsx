@@ -83,6 +83,47 @@ describe('SubtitleRow — compact', () => {
   })
 })
 
+describe('SubtitleRow — confidence', () => {
+  const risky = [
+    { word: 'world', probability: 0.42 },
+    { word: 'maybe', probability: 0.55 },
+  ]
+
+  it('shows a low-conf badge with the risky word count (tooltip lists them)', () => {
+    render(<SubtitleRow {...baseProps({ risky })} />)
+    const badge = screen.getByText('2 low-conf')
+    expect(badge).toBeInTheDocument()
+    expect(badge).toHaveAttribute('title', 'Words the AI was unsure about: world, maybe')
+  })
+
+  it('renders no badge when there are no risky words', () => {
+    render(<SubtitleRow {...baseProps({ risky: [] })} />)
+    expect(screen.queryByText(/low-conf/)).not.toBeInTheDocument()
+  })
+
+  it('marks risky words with <mark> only while the toggle is on', () => {
+    const off = render(<SubtitleRow {...baseProps({ risky })} />)
+    expect(off.getByText('Hello world').tagName).not.toBe('MARK')
+
+    const on = render(
+      <SubtitleRow {...baseProps({ risky, showConfidence: true })} />,
+    )
+    expect(on.getByText('world').tagName).toBe('MARK')
+    expect(on.getByText('Hello').tagName).not.toBe('MARK') // plain chunk span
+  })
+
+  it('lists risky words with probabilities in the expanded panel', () => {
+    render(
+      <SubtitleRow
+        {...baseProps({ selected: true, risky, showConfidence: true })}
+      />,
+    )
+    expect(screen.getByText('Low-confidence words:')).toBeInTheDocument()
+    expect(screen.getByText('world · 42%')).toBeInTheDocument()
+    expect(screen.getByText('maybe · 55%')).toBeInTheDocument()
+  })
+})
+
 describe('SubtitleRow — expanded', () => {
   it('edits text through the textarea', () => {
     const onTextChange = vi.fn()

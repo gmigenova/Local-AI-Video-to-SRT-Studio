@@ -408,6 +408,64 @@ class TestCancelAndRetry:
             db.close()
 
 
+class TestJobStatistics:
+    """Derived per-job stats on JobOut: processing_ms + media_duration_ms."""
+
+    def test_processing_stats_through_lifecycle(self, client, media_id, worker):
+        drain_queue()
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}
+        ).json()["job_id"]
+
+        queued = client.get(f"/api/v1/jobs/{job_id}").json()
+        assert queued["processing_ms"] is None  # not started yet
+        assert queued["media_duration_ms"] is not None
+        assert queued["media_duration_ms"] > 1000  # from the upload-time probe
+
+        assert worker.process_once() == job_id
+
+        done = client.get(f"/api/v1/jobs/{job_id}").json()
+        assert done["processing_ms"] is not None
+        assert done["processing_ms"] >= 0
+
+        listing = client.get("/api/v1/jobs").json()["items"]
+        listed = next(item for item in listing if item["job_id"] == job_id)
+        assert listed["processing_ms"] == done["processing_ms"]
+        assert listed["media_duration_ms"] == done["media_duration_ms"]
+
+    def test_cancelled_queued_job_has_no_processing_time(self, client, media_id):
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}
+        ).json()["job_id"]
+        assert client.post(f"/api/v1/jobs/{job_id}/cancel").status_code == 200
+        # cancelled before a worker ever claimed it: completed_at is set but
+        # started_at never was -> no processing time to report
+        body = client.get(f"/api/v1/jobs/{job_id}").json()
+        assert body["status"] == "cancelled"
+        assert body["processing_ms"] is None
+
+    def test_retry_resets_processing_time(self, client, media_id, worker):
+        drain_queue()
+        job_id = client.post(
+            "/api/v1/jobs", json={"media_id": media_id, "model": "tiny"}
+        ).json()["job_id"]
+        assert worker.process_once() == job_id
+        assert client.get(f"/api/v1/jobs/{job_id}").json()["processing_ms"] is not None
+
+        db = get_session_factory()()
+        try:
+            # the API only retries failed/cancelled jobs; the repo method is
+            # what the endpoint and recovery share, so exercise it directly
+            JobsRepository(db).retry(job_id)
+        finally:
+            db.close()
+
+        body = client.get(f"/api/v1/jobs/{job_id}").json()
+        assert body["status"] == "queued"
+        assert body["processing_ms"] is None  # fresh run, no accumulated time
+        assert body["media_duration_ms"] is not None
+
+
 class TestSubtitleEditing:
     @requires_ffmpeg
     def test_update_bulk_reprocess_and_export(self, client, media_id, worker):

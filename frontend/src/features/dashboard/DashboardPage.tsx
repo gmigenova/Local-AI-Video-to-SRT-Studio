@@ -15,7 +15,23 @@ import {
 
 import { useCreateProject, useJobs, useProjects } from '../../api/hooks'
 import { Button, Card, CardHeader, EmptyState, Field, Modal, inputClass, StatusBadge } from '../../components/ui'
-import { languageName } from '../../utils/format'
+import { formatDuration, languageName, speedFactor } from '../../utils/format'
+import type { Job } from '../../types'
+
+/** Per-job stats line for the recent-activity list: video length vs actual
+ *  processing time (completed shows the realtime speed factor too). */
+function jobStatsLine(job: Job): string | null {
+  const parts: string[] = []
+  if (job.media_duration_ms != null) parts.push(`${formatDuration(job.media_duration_ms)} video`)
+  if (job.processing_ms != null) {
+    parts.push(`${formatDuration(job.processing_ms)} processing`)
+    const speed = speedFactor(job.media_duration_ms, job.processing_ms)
+    if (job.status === 'completed' && speed !== null) {
+      parts.push(`${speed.toFixed(1)}× realtime`)
+    }
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
 
 export default function DashboardPage() {
   const projects = useProjects()
@@ -26,6 +42,10 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     const items = jobs.data?.items ?? []
+    const speeds = items
+      .filter((j) => j.status === 'completed')
+      .map((j) => speedFactor(j.media_duration_ms, j.processing_ms))
+      .filter((s): s is number => s !== null)
     return {
       projects: projects.data?.length ?? 0,
       videos: new Set(items.flatMap((j) => j.media_id)).size,
@@ -33,6 +53,7 @@ export default function DashboardPage() {
       active: items.filter((j) => !['completed', 'failed', 'cancelled'].includes(j.status)).length,
       failed: items.filter((j) => j.status === 'failed').length,
       recent: items.slice(0, 8),
+      avgSpeed: speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : null,
     }
   }, [projects.data, jobs.data])
 
@@ -60,7 +81,16 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard icon={<FolderOpen size={18} />} label="Projects" value={stats.projects} />
         <StatCard icon={<Clapperboard size={18} />} label="Videos" value={stats.videos} />
-        <StatCard icon={<CheckCircle2 size={18} />} label="Completed" value={stats.completed} />
+        <StatCard
+          icon={<CheckCircle2 size={18} />}
+          label="Completed"
+          value={stats.completed}
+          subtitle={
+            stats.avgSpeed !== null
+              ? `avg ${stats.avgSpeed.toFixed(1)}× realtime`
+              : undefined
+          }
+        />
         <StatCard
           icon={stats.failed > 0 ? <XCircle size={18} /> : <Activity size={18} />}
           label={stats.failed > 0 ? `Failed / ${stats.active} active` : 'Active jobs'}
@@ -104,6 +134,11 @@ export default function DashboardPage() {
                     <p className="mt-0.5 text-xs text-muted">
                       {new Date(job.created_at).toLocaleString()}
                     </p>
+                    {jobStatsLine(job) ? (
+                      <p className="mt-0.5 font-mono text-[11px] tabular-nums text-muted/80">
+                        {jobStatsLine(job)}
+                      </p>
+                    ) : null}
                   </div>
                   <StatusBadge status={job.status} />
                 </Link>
@@ -151,10 +186,12 @@ function StatCard({
   icon,
   label,
   value,
+  subtitle,
 }: {
   icon: React.ReactNode
   label: string
   value: number
+  subtitle?: string
 }) {
   return (
     <Card className="p-4 sm:p-5">
@@ -162,6 +199,9 @@ function StatCard({
         <div className="min-w-0">
           <p className="truncate text-xs text-muted">{label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
+          {subtitle ? (
+            <p className="mt-0.5 truncate text-[11px] text-muted">{subtitle}</p>
+          ) : null}
         </div>
         <div className="shrink-0 rounded-lg bg-accent/10 p-2.5 text-accent">{icon}</div>
       </div>

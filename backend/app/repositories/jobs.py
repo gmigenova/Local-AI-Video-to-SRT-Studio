@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.common import utcnow
 from app.models.job import ACTIVE_JOB_STATUSES, PROCESSING_JOB_STATUSES, JobStatus, TranscriptionJob
@@ -52,7 +52,13 @@ class JobsRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[TranscriptionJob]:
-        stmt = select(TranscriptionJob).order_by(TranscriptionJob.created_at.desc())
+        # eager-load media: JobOut derives media_duration_ms per job, and a
+        # lazy load here would fire one extra query per listed job (N+1)
+        stmt = (
+            select(TranscriptionJob)
+            .options(selectinload(TranscriptionJob.media))
+            .order_by(TranscriptionJob.created_at.desc())
+        )
         if status:
             stmt = stmt.where(TranscriptionJob.status == status)
         if media_id:

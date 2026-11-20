@@ -80,3 +80,21 @@ class TranscriptionJob(Base):
         passive_deletes=True,
         order_by="TranscriptionSegment.segment_index",
     )
+
+    # -- derived statistics (no columns; exposed via JobOut) --------------
+    @property
+    def processing_ms(self) -> int | None:
+        """Wall time of the latest run (claim -> terminal state); None while
+        queued/running or for a job cancelled before it started. Retry and
+        restart recovery reset ``started_at``, so this never accumulates
+        across runs."""
+        if self.started_at is None or self.completed_at is None:
+            return None
+        delta = (self.completed_at - self.started_at).total_seconds() * 1000
+        return int(delta) if delta >= 0 else None
+
+    @property
+    def media_duration_ms(self) -> int | None:
+        """Duration of the source video (from the upload-time ffprobe probe)."""
+        media = self.media
+        return media.duration_ms if media is not None else None

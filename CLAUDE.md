@@ -171,7 +171,7 @@ hardcode absolute user paths (§20.11).
 - **Post-spec: frontend test foundation** — Vitest + Testing Library
   (`jsdom`, setup at `frontend/src/test/setup.ts` stubs `matchMedia` /
   `crypto.randomUUID`; RTL cleanup is manual per-file because vitest runs
-  without globals). 93 tests cover the pure editor logic (quality checks,
+  without globals). 113 tests cover the pure editor logic (quality checks,
   time parsing, `splitTextAtRatio` incl. Thai code-unit behaviour), the
   `useSubtitleEditor` hook (undo/redo, typing coalescing, debounced
   auto-save payload, `applyTranslation`/`applyCleanup`/speaker ops),
@@ -248,6 +248,38 @@ hardcode absolute user paths (§20.11).
   **No external font loading** — a Google Fonts link made first paint hang
   on machines without internet (this is a local-first app); the stack stays
   Inter→system-ui/Segoe UI Variable with graceful fallback.
+- **Post-spec: editor batch tools + AI insights + job stats** — four
+  additions built on existing infrastructure (no DB migrations):
+  *Global time shift* — `useSubtitleEditor.shiftTimes(fromKey, deltaMs)`
+  shifts all rows (or from the selected row on) as ONE undo step, clamping
+  `start >= 0` while keeping `end > start`; `TimeShiftDialog` (toolbar
+  "Shift" button) offers quick ±100/±1000 ms chips; auto-save persists it —
+  the sync endpoint stays the only persistence path. *Low-confidence word
+  highlighting* — `GET /jobs/{id}/transcript` serves the raw
+  `transcript.json` (clean 404 when absent, audio-endpoint pattern);
+  `confidence.ts` maps words to rows by max time overlap (threshold 0.6,
+  fixed) and chunks row text so edited-away tokens simply lose their
+  highlight. SubtitleRow shows a "N low-conf" badge, `<mark>`s risky words
+  in the compact text and lists them with probabilities when expanded; the
+  toolbar Confidence toggle only appears for jobs with word data. *Video
+  summary (Ollama)* — `app/services/llm/summary.py` (same client shape as
+  cleanup; `SummaryServiceError` carries status+message): prompts ask for
+  `SUMMARY:` + `KEY POINTS:` with `[mm:ss]` stamps parsed leniently; long
+  transcripts go map-reduce under `MAX_CHARS_PER_REQUEST`. API `POST
+  /jobs/{id}/summarize` (reads *saved* rows, 409 when empty; language:
+  payload → detected th → en) persists `summary.json` under
+  `storage/transcripts/{job}/` (rides existing deletion/retention) and `GET
+  /jobs/{id}/summary` reads it back. `SummaryDialog` reuses the
+  CleanupDialog model dropdown + not-reachable warning, flushes auto-save
+  first, seeks the video when a key point is clicked; model resolution:
+  request → `OLLAMA_SUMMARY_MODEL` → `OLLAMA_CLEANUP_MODEL`. *Job stats* —
+  `TranscriptionJob.processing_ms` / `media_duration_ms` are computed
+  properties on `JobOut` (started_at is set on claim and reset by
+  retry/recovery, so it reflects the latest run only);
+  `JobsRepository.list_jobs` selectinloads media to avoid N+1. The
+  dashboard shows "M:SS video · M:SS processing · N.N× realtime" per recent
+  job and "avg N.N× realtime" on the Completed card (`speedFactor` in
+  `utils/format.ts`).
 
 ## Architecture invariants (do not break)
 

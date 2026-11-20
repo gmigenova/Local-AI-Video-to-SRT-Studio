@@ -16,7 +16,10 @@ import {
   FileText,
   FileUp,
   Film,
+  Gauge,
   Languages,
+  ListTree,
+  MoveHorizontal,
   Plus,
   Redo2,
   RefreshCw,
@@ -29,7 +32,7 @@ import {
 } from 'lucide-react'
 
 import { exportUrl, jobAudioUrl } from '../../api/client'
-import { useJob, useMediaItem, useSubtitles } from '../../api/hooks'
+import { useJob, useMediaItem, useSubtitles, useTranscript } from '../../api/hooks'
 import { api } from '../../api/client'
 import {
   Badge,
@@ -48,8 +51,11 @@ import Timeline from './components/Timeline'
 import SubtitleRow from './components/SubtitleRow'
 import SearchReplace from './components/SearchReplace'
 import SpeakerRenameDialog from './components/SpeakerRenameDialog'
+import SummaryDialog from './components/SummaryDialog'
+import TimeShiftDialog from './components/TimeShiftDialog'
 import TranslateDialog from './components/TranslateDialog'
 import { checkSubtitles, ISSUE_LABELS } from './quality'
+import { mapWordsToRows } from './confidence'
 import { useSubtitleEditor } from './useSubtitleEditor'
 import { languageName } from '../../utils/format'
 
@@ -60,6 +66,7 @@ export default function SubtitleEditorPage() {
   const completed = job.data?.status === 'completed'
   const media = useMediaItem(job.data?.media_id)
   const subtitlesQuery = useSubtitles(jobId, completed)
+  const transcript = useTranscript(jobId, completed)
   const editor = useSubtitleEditor(jobId)
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -73,6 +80,9 @@ export default function SubtitleEditorPage() {
   const [showTranslate, setShowTranslate] = useState(false)
   const [showCleanup, setShowCleanup] = useState(false)
   const [showSpeakerRename, setShowSpeakerRename] = useState(false)
+  const [showShift, setShowShift] = useState(false)
+  const [showConfidence, setShowConfidence] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [reprocessing, setReprocessing] = useState(false)
@@ -164,6 +174,17 @@ export default function SubtitleEditorPage() {
   }, [editor.subs])
   const knownSpeakers = useMemo(() => Object.keys(speakerCounts).sort(), [speakerCounts])
   const hasSpeakers = knownSpeakers.length > 0
+
+  // low-confidence words per row — remapped whenever rows change, so rows
+  // whose times no longer overlap the transcript simply lose their marks
+  const riskyByRow = useMemo(
+    () => mapWordsToRows(editor.subs, transcript.data?.segments ?? []),
+    [editor.subs, transcript.data],
+  )
+  const hasWordConfidence = useMemo(
+    () => (transcript.data?.segments ?? []).some((s) => s.words.length > 0),
+    [transcript.data],
+  )
 
   const seek = useCallback((ms: number) => {
     const video = videoRef.current
@@ -427,6 +448,24 @@ export default function SubtitleEditorPage() {
               <Users size={15} /> Speakers
             </Button>
           ) : null}
+          <Button
+            variant="secondary"
+            title="Shift all (or trailing) subtitle times by a fixed offset"
+            onClick={() => setShowShift(true)}
+            disabled={editor.subs.length === 0}
+          >
+            <MoveHorizontal size={15} /> Shift
+          </Button>
+          {hasWordConfidence ? (
+            <Button
+              variant="secondary"
+              aria-pressed={showConfidence}
+              title="Highlight words the transcription was unsure about (check these first)"
+              onClick={() => setShowConfidence((v) => !v)}
+            >
+              <Gauge size={15} /> Confidence
+            </Button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -462,6 +501,17 @@ export default function SubtitleEditorPage() {
             disabled={editor.subs.length === 0}
           >
             <Wand2 size={15} /> AI cleanup
+          </Button>
+          <Button
+            variant="secondary"
+            title="Summarise this video with a local Ollama model"
+            onClick={() => {
+              setNotice(null)
+              setShowSummary(true)
+            }}
+            disabled={editor.subs.length === 0}
+          >
+            <ListTree size={15} /> Summary
           </Button>
           <Button
             variant="secondary"
@@ -610,6 +660,34 @@ export default function SubtitleEditorPage() {
         />
       ) : null}
 
+      {showShift ? (
+        <TimeShiftDialog
+          selectedKey={selectedKey}
+          selectedIndex={selectedIndex}
+          total={editor.subs.length}
+          onApply={(fromKey, deltaMs) => {
+            const count = editor.shiftTimes(fromKey, deltaMs)
+            setNotice(
+              count > 0
+                ? `Shifted ${count} subtitle${count === 1 ? '' : 's'} by ` +
+                    `${deltaMs > 0 ? '+' : ''}${deltaMs} ms. Undo with Ctrl+Z.`
+                : 'Nothing to shift.',
+            )
+          }}
+          onClose={() => setShowShift(false)}
+        />
+      ) : null}
+
+      {showSummary ? (
+        <SummaryDialog
+          jobId={jobId!}
+          onBeforeSummarize={editor.save}
+          detectedLanguage={job.data.detected_language ?? job.data.language}
+          onSeek={seek}
+          onClose={() => setShowSummary(false)}
+        />
+      ) : null}
+
       {showRender ? (
         <BurnInVideo
           jobId={jobId!}
@@ -749,6 +827,8 @@ export default function SubtitleEditorPage() {
                   issues={issues.get(sub.key) ?? []}
                   isLast={index === editor.subs.length - 1}
                   search={search}
+                  risky={riskyByRow.get(sub.key)}
+                  showConfidence={showConfidence}
                   onSelect={() => selectRow(sub.key, sub.start_ms)}
                   onTextChange={(text) => editor.setText(sub.key, text)}
                   onTimesChange={(start, end) => editor.setTimes(sub.key, start, end)}

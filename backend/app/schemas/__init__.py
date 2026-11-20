@@ -8,6 +8,7 @@ from app.schemas.subtitle import (
     SubtitleOut,
     SubtitleUpdate,
 )
+from app.schemas.summary import SummarizeJobRequest, SummaryKeyPointOut, SummaryOut
 
 __all__ = [
     "AudioStreamOut",
@@ -21,5 +22,8 @@ __all__ = [
     "ProjectOut",
     "SubtitleOut",
     "SubtitleUpdate",
+    "SummarizeJobRequest",
+    "SummaryKeyPointOut",
+    "SummaryOut",
     "UploadResult",
 ]

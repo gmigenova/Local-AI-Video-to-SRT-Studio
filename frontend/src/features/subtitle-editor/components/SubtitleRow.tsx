@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react'
 import { AlertTriangle, Merge, Scissors, Trash2 } from 'lucide-react'
 
 import { Badge, Button, inputClass } from '../../../components/ui'
+import type { RiskyWord } from '../confidence'
+import { confidenceChunks } from '../confidence'
 import type { SubtitleIssue } from '../quality'
 import { ISSUE_LABELS } from '../quality'
 import type { EditorSubtitle } from '../useSubtitleEditor'
@@ -19,6 +21,8 @@ export default function SubtitleRow({
   isLast,
   search,
   knownSpeakers,
+  risky,
+  showConfidence,
   onSelect,
   onTextChange,
   onTimesChange,
@@ -35,6 +39,10 @@ export default function SubtitleRow({
   isLast: boolean
   search: string
   knownSpeakers: string[]
+  /** Low-confidence transcript words mapped to this row (time overlap). */
+  risky?: RiskyWord[]
+  /** Confidence toggle from the toolbar — gates in-text marks. */
+  showConfidence?: boolean
   onSelect: () => void
   onTextChange: (text: string) => void
   onTimesChange: (start: number, end: number) => void
@@ -96,6 +104,16 @@ export default function SubtitleRow({
             {sub.speaker ? <Badge tone="info">{sub.speaker}</Badge> : null}
             <span className="ml-auto flex items-center gap-1.5 font-sans">
               {sub.is_edited ? <Badge tone="info">edited</Badge> : null}
+              {risky && risky.length > 0 ? (
+                <Badge
+                  tone="warning"
+                  title={`Words the AI was unsure about: ${risky
+                    .map((w) => w.word)
+                    .join(', ')}`}
+                >
+                  {risky.length} low-conf
+                </Badge>
+              ) : null}
               {issues.length > 0 ? (
                 <span
                   title={issues.map((i) => ISSUE_LABELS[i.code] ?? i.code).join(', ')}
@@ -107,7 +125,13 @@ export default function SubtitleRow({
             </span>
           </span>
           <span className="min-w-0 whitespace-pre-line text-base leading-normal">
-            {search ? <Highlighted text={sub.text} search={search} /> : sub.text}
+            {search ? (
+              <Highlighted text={sub.text} search={search} />
+            ) : showConfidence && risky && risky.length > 0 ? (
+              <ConfidenceText text={sub.text} risky={risky} />
+            ) : (
+              sub.text
+            )}
           </span>
         </span>
       </button>
@@ -187,6 +211,17 @@ export default function SubtitleRow({
             </div>
           </div>
 
+          {showConfidence && risky && risky.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-warning/5 px-3 py-2 text-xs text-warning">
+              <span className="font-medium">Low-confidence words:</span>
+              {risky.map((w, i) => (
+                <Badge key={i} tone="warning" title={`probability ${w.probability}`}>
+                  {w.word} · {Math.round(w.probability * 100)}%
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+
           {issues.length > 0 ? (
             <ul className="space-y-1 rounded-md bg-warning/5 px-3 py-2">
               {issues.map((issue, i) => (
@@ -200,6 +235,26 @@ export default function SubtitleRow({
         </div>
       ) : null}
     </li>
+  )
+}
+
+function ConfidenceText({ text, risky }: { text: string; risky: RiskyWord[] }) {
+  return (
+    <>
+      {confidenceChunks(text, risky).map((chunk, i) =>
+        chunk.risky ? (
+          <mark
+            key={i}
+            className="rounded-sm bg-danger/25 text-inherit"
+            title="Low-confidence word — check this one"
+          >
+            {chunk.text}
+          </mark>
+        ) : (
+          <span key={i}>{chunk.text}</span>
+        ),
+      )}
+    </>
   )
 }
 

@@ -11,6 +11,17 @@ export function formatDuration(ms: number | null | undefined): string {
   return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
+/** Video duration vs processing time, e.g. 3.2 = "3.2× realtime"; null when
+ *  either value is missing or processing took no measurable time. */
+export function speedFactor(
+  durationMs: number | null | undefined,
+  processingMs: number | null | undefined,
+): number | null {
+  if (durationMs == null || processingMs == null) return null
+  if (processingMs <= 0 || durationMs <= 0) return null
+  return durationMs / processingMs
+}
+
 /** ms -> SRT-style timestamp for display: HH:MM:SS,mmm */
 export function formatTimestamp(ms: number): string {
   const clamped = Math.max(0, Math.round(ms))

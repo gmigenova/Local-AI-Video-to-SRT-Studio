@@ -164,9 +164,12 @@ export function CardHeader({
 export function Badge({
   children,
   tone = 'neutral',
+  title,
 }: {
   children: ReactNode
   tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info'
+  /** Tooltip text (e.g. listing the words behind a count). */
+  title?: string
 }) {
   const tones = {
     neutral: 'bg-surface-2 text-muted',
@@ -177,6 +180,7 @@ export function Badge({
   }
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
         tones[tone],

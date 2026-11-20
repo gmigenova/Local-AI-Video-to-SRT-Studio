@@ -327,6 +327,33 @@ export function useSubtitleEditor(jobId: string | undefined) {
     [commit],
   )
 
+  /** Shift row times by ±delta ms as ONE undo step. `fromKey === null`
+   * shifts every row; otherwise only that row and everything after it
+   * (e.g. when the subtitles drift out of sync from some point on).
+   * Start is clamped to >= 0 while keeping end > start. Returns the
+   * number of rows affected; 0 = nothing done (no history entry). */
+  const shiftTimes = useCallback(
+    (fromKey: string | null, deltaMs: number): number => {
+      if (deltaMs === 0) return 0
+      const current = subsRef.current
+      const startIndex = fromKey ? current.findIndex((s) => s.key === fromKey) : 0
+      if (fromKey && startIndex === -1) return 0
+      const next = current.map((s, i) => {
+        if (i < startIndex) return s
+        const start = Math.max(0, s.start_ms + deltaMs)
+        return {
+          ...s,
+          start_ms: start,
+          end_ms: Math.max(s.end_ms + deltaMs, start + 1),
+          is_edited: true,
+        }
+      })
+      commit(next)
+      return current.length - startIndex
+    },
+    [commit],
+  )
+
   // ------------------------------------------------------------ persistence
   const save = useCallback(async (): Promise<boolean> => {
     if (!jobId || !loaded) return false
@@ -388,5 +415,6 @@ export function useSubtitleEditor(jobId: string | undefined) {
     applyCleanup,
     setSpeaker,
     applySpeakerRename,
+    shiftTimes,
   }
 }

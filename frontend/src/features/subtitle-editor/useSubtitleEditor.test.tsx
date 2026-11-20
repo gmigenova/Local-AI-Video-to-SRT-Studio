@@ -407,6 +407,88 @@ describe('useSubtitleEditor — speakers', () => {
   })
 })
 
+describe('useSubtitleEditor — shiftTimes', () => {
+  it('shifts every row by the offset as ONE undo step', () => {
+    const { result } = setup()
+    let count = 0
+    act(() => {
+      count = result.current.shiftTimes(null, 500)
+    })
+    expect(count).toBe(2)
+    expect(result.current.subs[0].start_ms).toBe(500)
+    expect(result.current.subs[0].end_ms).toBe(2500)
+    expect(result.current.subs[1].start_ms).toBe(2600)
+    expect(result.current.subs[1].end_ms).toBe(4500)
+
+    act(() => result.current.undo()) // one step restores BOTH rows
+    expect(result.current.subs[0].start_ms).toBe(0)
+    expect(result.current.subs[1].start_ms).toBe(2100)
+  })
+
+  it('shifts only the given row and everything after it', () => {
+    const { result } = setup()
+    let count = 0
+    act(() => {
+      count = result.current.shiftTimes('b', 300)
+    })
+    expect(count).toBe(1)
+    expect(result.current.subs[0].start_ms).toBe(0) // untouched
+    expect(result.current.subs[0].is_edited).toBe(false)
+    expect(result.current.subs[1].start_ms).toBe(2400)
+    expect(result.current.subs[1].end_ms).toBe(4300)
+    expect(result.current.subs[1].is_edited).toBe(true)
+  })
+
+  it('clamps negative shifts so end > start >= 0 always holds', () => {
+    const { result } = setup()
+    act(() => {
+      result.current.shiftTimes(null, -5000)
+    })
+    for (const sub of result.current.subs) {
+      expect(sub.start_ms).toBeGreaterThanOrEqual(0)
+      expect(sub.end_ms).toBeGreaterThan(sub.start_ms)
+    }
+    expect(result.current.subs[0].start_ms).toBe(0) // 0 - 5000 clamped
+    expect(result.current.subs[0].end_ms).toBe(1) // 2000 - 5000 clamped to start + 1
+  })
+
+  it('a zero delta does nothing (no history entry, not dirty)', () => {
+    const { result } = setup()
+    let count = -1
+    act(() => {
+      count = result.current.shiftTimes(null, 0)
+    })
+    expect(count).toBe(0)
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.canUndo).toBe(false)
+  })
+
+  it('an unknown key returns 0 without committing', () => {
+    const { result } = setup()
+    let count = -1
+    act(() => {
+      count = result.current.shiftTimes('nope', 500)
+    })
+    expect(count).toBe(0)
+    expect(result.current.dirty).toBe(false)
+    expect(result.current.canUndo).toBe(false)
+  })
+
+  it('auto-saves the shifted times through the sync endpoint', async () => {
+    vi.useFakeTimers()
+    const { result } = setup()
+    act(() => result.current.shiftTimes('b', 250))
+    await act(async () => {
+      vi.advanceTimersByTime(1200)
+    })
+    expect(mocks.sync).toHaveBeenCalledTimes(1)
+    const payload = mocks.sync.mock.calls[0][1]
+    expect(payload[0].start_ms).toBe(0) // row before the shift point
+    expect(payload[1].start_ms).toBe(2350)
+    expect(payload[1].end_ms).toBe(4250)
+  })
+})
+
 describe('useSubtitleEditor — persistence', () => {
   it('auto-saves once after the debounce delay, with a 1-based payload', async () => {
     vi.useFakeTimers()
