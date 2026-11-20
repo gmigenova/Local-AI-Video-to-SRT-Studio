@@ -308,6 +308,39 @@ body {
   animation: sheen 1.6s ease-in-out infinite;
 }
 
+/* equalizer bars — Processing hero ("audio being transcribed"). Per-bar
+   period/delay offsets derived from --i make the composite rhythm
+   non-repeating; the base transform is the static (inactive /
+   reduced-motion) state, same fallback trick as .orbit-glyph */
+@keyframes eq-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  35% {
+    transform: scaleY(1);
+  }
+  62% {
+    transform: scaleY(0.45);
+  }
+  82% {
+    transform: scaleY(0.8);
+  }
+}
+
+.eq-bar {
+  transform-origin: bottom;
+  /* resting waveform: a rising left→right staircase */
+  transform: scaleY(calc(0.35 + var(--i) * 0.1));
+}
+
+.eq-bar-active {
+  /* periods 0.9s→1.6s (the 5th bar joins the shared working cadence);
+     negative delays scatter phase so bars never move in lockstep */
+  animation: eq-bar calc(0.9s + var(--i) * 0.175s) ease-in-out
+    calc(var(--i) * -0.37s) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

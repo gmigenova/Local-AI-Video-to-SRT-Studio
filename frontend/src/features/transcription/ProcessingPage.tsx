@@ -4,12 +4,15 @@
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Cpu, RotateCcw, XCircle } from 'lucide-react'
+import { ArrowLeft, RotateCcw, XCircle } from 'lucide-react'
 
 import { useCancelJob, useJob, useMediaItem, useRetryJob } from '../../api/hooks'
 import { Button, Card, Progress, StatusBadge } from '../../components/ui'
+import { useTweenedNumber } from '../../hooks/useTweenedNumber'
 import { ACTIVE_JOB_STATUSES } from '../../types'
 import { elapsedSince, languageName } from '../../utils/format'
+import { CyclingStatusMessage } from './components/CyclingStatusMessage'
+import { EqualizerBars } from './components/EqualizerBars'
 
 export default function ProcessingPage() {
   const { jobId } = useParams()
@@ -19,6 +22,9 @@ export default function ProcessingPage() {
   const cancel = useCancelJob()
   const retry = useRetryJob()
   const [, setTick] = useState(0)
+  // smooths the % readout between the 1.5s polls (before the early return
+  // below — hooks must run unconditionally)
+  const tweenedProgress = useTweenedNumber(job.data?.progress ?? 0, 900)
 
   // 1s ticker for the elapsed clock
   useEffect(() => {
@@ -38,6 +44,8 @@ export default function ProcessingPage() {
   const data = job.data
   const isActive = ACTIVE_JOB_STATUSES.includes(data.status)
   const failed = data.status === 'failed'
+  const stageKey = data.current_stage ?? data.status
+  const stageLabel = data.current_stage ?? data.status.replace(/_/g, ' ')
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -71,15 +79,20 @@ export default function ProcessingPage() {
               </span>
             </div>
           </div>
-          <Cpu size={22} className="text-muted" />
+          <EqualizerBars active={isActive} />
         </div>
 
         <div className="mt-6 space-y-2">
           <div className="flex items-center justify-between text-xs text-muted">
-            <span>{data.current_stage ?? data.status.replace(/_/g, ' ')}</span>
-            <span className="tabular-nums">{Math.round(data.progress)}%</span>
+            {/* keyed remount replays the crossfade on real stage changes */}
+            <span key={stageKey} className="animate-msg-in">
+              {stageLabel}
+            </span>
+            <span className="tabular-nums">{Math.round(tweenedProgress)}%</span>
           </div>
+          {/* raw value — the fill already CSS-transitions its width */}
           <Progress value={data.progress} />
+          {isActive ? <CyclingStatusMessage srText={`Stage: ${stageLabel}`} /> : null}
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
@@ -91,7 +104,9 @@ export default function ProcessingPage() {
           </div>
           <div>
             <p className="text-xs text-muted">Stage</p>
-            <p className="mt-1">{data.current_stage ?? '—'}</p>
+            <p key={stageKey} className="mt-1 animate-msg-in">
+              {data.current_stage ?? '—'}
+            </p>
           </div>
         </div>
 
